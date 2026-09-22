@@ -19,6 +19,9 @@ app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false, // Critical: Allows Google OAuth popup window to communicate with opener
+    crossOriginResourcePolicy: false,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }, // Ensures Google receives the exact origin
   })
 );
 app.use(cors());

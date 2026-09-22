@@ -40,6 +40,7 @@ export const LoginView = () => {
             client_id: authConfig.googleClientId,
             callback: handleCredentialResponse,
             auto_select: false,
+            itp_support: true,
           });
 
           // Render clean, wide Google button
@@ -52,6 +53,9 @@ export const LoginView = () => {
             logo_alignment: 'left',
             width: 320,
           });
+
+          // Prompt One Tap if supported by browser
+          window.google.accounts.id.prompt();
         } catch (err) {
           console.warn('[LoginView] Error rendering Google button:', err);
         }
