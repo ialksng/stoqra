@@ -11,29 +11,39 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete, onExportRepor
     setSyncing(true);
     try {
       const res = await triggerGmailSync();
-      const processed = res.result?.processed ?? 0;
-      const skipped = res.result?.skipped ?? 0;
-      const reason = res.result?.reason;
-      const details = res.result?.details || [];
+      const result = res.result || {};
+      const processed = result.processed ?? 0;
+      const skipped = result.skipped ?? 0;
+      const errorMsg = result.error || result.reason;
+      const details = result.details || [];
 
-      let msg = `Gmail sync complete: ${processed} processed, ${skipped} skipped.`;
-      if (reason) {
-        msg = `Gmail sync: ${reason}`;
-      } else if (processed === 0 && skipped === 0) {
-        msg = 'Gmail sync: No unread emails with PDF attachments found in INBOX.';
-      } else if (skipped > 0) {
+      if (result.status === 'error' || (errorMsg && processed === 0 && skipped === 0)) {
+        if (onSyncComplete) onSyncComplete(`Gmail sync error: ${errorMsg}`, 'error');
+        return;
+      }
+
+      let msg = `Gmail sync complete: ${processed} new invoice(s) processed.`;
+      if (skipped > 0) {
         const skipSummary = details
           .filter((d) => d.status === 'skipped')
           .map((d) => {
             if (d.reason === 'no_inventory_items') return `"${d.filename || 'PDF'}" has no invoice line items`;
-            if (d.reason === 'already_exists') return 'already processed';
+            if (d.reason === 'already_exists' || d.reason === 'already_processed') return 'already processed';
+            if (d.reason && d.reason.includes('already exists in records')) {
+              return `${d.invoiceNumber ? `Invoice #${d.invoiceNumber} ` : ''}already ingested`;
+            }
             if (d.reason === 'no_pdf_attachment') return 'no PDF attachment';
             return d.reason;
           })
           .join(', ');
-        if (skipSummary) {
-          msg += ` (${skipSummary})`;
+
+        if (processed === 0) {
+          msg = `Gmail sync: Checked email(s) — all were already ingested or had no new invoices (${skipSummary}).`;
+        } else {
+          msg += ` (${skipped} skipped: ${skipSummary})`;
         }
+      } else if (processed === 0) {
+        msg = 'Gmail sync: No new emails with PDF attachments found.';
       }
 
       if (onSyncComplete) onSyncComplete(msg, processed > 0 ? 'success' : 'info');

@@ -87,8 +87,8 @@ export const syncGmailInvoices = async () => {
         continue;
       }
 
-      // Search query for PDF attachments in INBOX (both read and unread, keyword agnostic)
-      const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment filename:pdf label:INBOX';
+      // Search query for PDF attachments across mailbox (read and unread, all categories, excluding trash/spam)
+      const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment filename:pdf -in:trash -in:spam';
       const listRes = await gmail.users.messages.list({
         userId: 'me',
         q: query,
