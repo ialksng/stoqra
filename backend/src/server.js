@@ -7,6 +7,7 @@ import { connectDB, disconnectDB } from './config/db.js';
 import { startGmailWatcher, stopGmailWatcher } from './workers/gmailWatcher.js';
 
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
 
 let server = null;
 
@@ -14,22 +15,32 @@ const startServer = async () => {
   try {
     console.log('---------------------------------------------------------');
     console.log('🚀 Launching Stoqra Inventory Management System...');
+    console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log('---------------------------------------------------------');
 
-    // 1. Establish database connection
-    await connectDB();
-
-    // 2. Start Express HTTP Server
-    server = app.listen(PORT, () => {
-      console.log(`[Server] Express HTTP server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-      console.log(`[Server] Health check available at http://localhost:${PORT}/health`);
+    // 1. Start HTTP Server immediately on 0.0.0.0 so Render detects the port
+    server = app.listen(PORT, HOST, () => {
+      console.log(`[Server] Express HTTP server running on http://${HOST}:${PORT}`);
+      console.log(`[Server] Health check ready at http://${HOST}:${PORT}/health`);
+      console.log(`[Server] Subpath ready at http://${HOST}:${PORT}/projects/stoqra`);
     });
 
-    // 3. Initialize background Gmail ingestion cron worker
-    startGmailWatcher();
+    // 2. Establish database connection in background (resilient to initial offline status)
+    connectDB()
+      .then((conn) => {
+        if (conn) {
+          // 3. Initialize background Gmail ingestion cron worker after DB connects
+          startGmailWatcher();
+        } else {
+          console.warn('[Server] Running without active database connection. Update MONGODB_URI in settings to enable full persistence.');
+        }
+      })
+      .catch((dbErr) => {
+        console.error('[Server] Non-fatal DB connection error during bootstrap:', dbErr.message);
+      });
 
   } catch (error) {
-    console.error('[Server] Critical startup error:', error.message);
+    console.error('[Server] Critical HTTP startup error:', error.message);
     process.exit(1);
   }
 };
