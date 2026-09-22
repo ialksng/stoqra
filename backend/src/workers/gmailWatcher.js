@@ -98,6 +98,9 @@ export const syncGmailInvoices = async () => {
       const messages = listRes.data.messages || [];
       console.log(`[GmailWatcher] Found ${messages.length} matching message(s) in INBOX.`);
 
+      // Clean up transient error states from ProcessedMail so previously failed messages can be re-evaluated
+      await ProcessedMail.deleteMany({ status: { $in: ['ERROR', 'NO_ITEMS'] } }).catch(() => {});
+
       for (const msgRef of messages) {
         const messageId = msgRef.id;
 
@@ -144,6 +147,7 @@ export const syncGmailInvoices = async () => {
           console.log(`[GmailWatcher] Processing ${pdfParts.length} PDF(s) in message ${messageId}...`);
 
           let messageHasValidInvoice = false;
+          let hadParseError = false;
 
           for (const part of pdfParts) {
             // 3. Download PDF attachment into memory buffer (either direct data or via attachment API)
@@ -169,10 +173,24 @@ export const syncGmailInvoices = async () => {
             // 4. Pass buffer to Gemini PDF extraction service
             console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${part.filename}" (${pdfBuffer.length} bytes)...`);
             let extractedInvoice = null;
+            let parseError = null;
             try {
               extractedInvoice = await parseInvoicePDF(pdfBuffer);
             } catch (parseErr) {
+              parseError = parseErr;
+              hadParseError = true;
               console.warn(`[GmailWatcher] Gemini parse error on "${part.filename}":`, parseErr.message);
+            }
+
+            if (parseError) {
+              results.errors += 1;
+              results.details.push({
+                messageId,
+                filename: part.filename,
+                status: 'error',
+                reason: parseError.message,
+              });
+              continue;
             }
 
             // If PDF contains no inventory line items (e.g. non-invoice PDF), safely skip
@@ -217,29 +235,54 @@ export const syncGmailInvoices = async () => {
             });
           }
 
-          // Mark message as processed in ProcessedMail cache to avoid future re-scans
-          await ProcessedMail.updateOne(
-            { messageId },
-            {
-              messageId,
-              status: messageHasValidInvoice ? 'PROCESSED' : 'NO_ITEMS',
-              reason: messageHasValidInvoice ? 'success' : 'no_inventory_items',
-            },
-            { upsert: true }
-          );
-
-          // 6. Attempt to remove UNREAD label from message if present
-          try {
-            await gmail.users.messages.modify({
-              userId: 'me',
-              id: messageId,
-              requestBody: {
-                removeLabelIds: ['UNREAD'],
+          if (messageHasValidInvoice) {
+            // Mark message as processed in ProcessedMail cache to avoid future re-scans
+            await ProcessedMail.updateOne(
+              { messageId },
+              {
+                messageId,
+                status: 'PROCESSED',
+                reason: 'success',
               },
-            });
-            console.log(`[GmailWatcher] Cleaned UNREAD label from message ${messageId}`);
-          } catch (labelErr) {
-            // Already read or label modification not permitted
+              { upsert: true }
+            );
+
+            // 6. Attempt to remove UNREAD label from message if present
+            try {
+              await gmail.users.messages.modify({
+                userId: 'me',
+                id: messageId,
+                requestBody: {
+                  removeLabelIds: ['UNREAD'],
+                },
+              });
+              console.log(`[GmailWatcher] Cleaned UNREAD label from message ${messageId}`);
+            } catch (labelErr) {
+              // Already read or label modification not permitted
+            }
+          } else if (hadParseError) {
+            console.log(`[GmailWatcher] Message ${messageId} had extraction errors. Leaving eligible for re-processing.`);
+            await ProcessedMail.updateOne(
+              { messageId },
+              {
+                messageId,
+                status: 'ERROR',
+                reason: 'temporary_ai_error',
+              },
+              { upsert: true }
+            );
+            // Keep UNREAD label intact so email is not prematurely marked as read
+          } else {
+            // PDF had 0 inventory items and no parse error
+            await ProcessedMail.updateOne(
+              { messageId },
+              {
+                messageId,
+                status: 'NO_ITEMS',
+                reason: 'no_inventory_items',
+              },
+              { upsert: true }
+            );
           }
         } catch (msgError) {
           console.error(`[GmailWatcher] Error processing message ${messageId}:`, msgError.message);
