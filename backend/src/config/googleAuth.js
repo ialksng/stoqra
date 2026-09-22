@@ -5,7 +5,7 @@ import { google } from 'googleapis';
  * @returns {google.auth.OAuth2}
  */
 export const getOAuth2Client = () => {
-  const clientId = process.env.GMAIL_CLIENT_ID;
+  const clientId = process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
   const redirectUri = process.env.GMAIL_REDIRECT_URI || 'https://developers.google.com/oauthplayground';
   const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
