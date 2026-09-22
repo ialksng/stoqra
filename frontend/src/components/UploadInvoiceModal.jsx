@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UploadCloud, CheckCircle2, AlertCircle, Loader2, File, X } from 'lucide-react';
+import { UploadCloud, CheckCircle2, AlertCircle, Loader2, FileText, X } from 'lucide-react';
 import { uploadInvoice } from '../services/api.js';
 import { formatINR } from '../utils/formatters.js';
 
@@ -77,22 +77,43 @@ export const UploadInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
           <div>
             <div
               style={{
-                backgroundColor: 'var(--success-light)',
-                border: '1px solid #a7f3d0',
+                backgroundColor: result.skipped ? '#fffbeb' : 'var(--success-light)',
+                border: result.skipped ? '1px solid #fde68a' : '1px solid #a7f3d0',
                 borderRadius: '8px',
                 padding: '16px',
                 marginBottom: '18px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#065f46', fontWeight: 700 }}>
-                <CheckCircle2 size={20} />
-                Gemini Extracted & Restocked Successfully!
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: result.skipped ? '#92400e' : '#065f46',
+                  fontWeight: 700,
+                }}
+              >
+                <CheckCircle2 size={20} color={result.skipped ? '#d97706' : '#059669'} />
+                {result.skipped
+                  ? 'Invoice Already Ingested (Duplicate Avoided)'
+                  : 'Gemini Extracted & Restocked Successfully!'}
               </div>
-              <div style={{ marginTop: '10px', fontSize: '13px', color: '#047857' }}>
+              <div
+                style={{
+                  marginTop: '10px',
+                  fontSize: '13px',
+                  color: result.skipped ? '#78350f' : '#047857',
+                }}
+              >
                 <div><strong>Invoice #:</strong> {result.invoice.invoiceNumber}</div>
                 <div><strong>Vendor:</strong> {result.invoice.vendor}</div>
                 <div><strong>Total Amount:</strong> {formatINR(result.invoice.totalAmount)}</div>
-                <div><strong>Line Items:</strong> {result.invoice.items?.length || 0} product(s)</div>
+                <div>
+                  <strong>Status:</strong>{' '}
+                  {result.skipped
+                    ? 'Already recorded previously. No duplicate stock was added.'
+                    : `${result.itemsProcessed?.length || result.invoice.items?.length || 0} product(s) restocked.`}
+                </div>
               </div>
             </div>
 

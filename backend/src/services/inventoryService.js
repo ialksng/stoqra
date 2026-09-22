@@ -68,10 +68,18 @@ export const processRestock = async (invoiceData, messageId = null) => {
     throw new InventoryError('Invalid invoice data: missing invoiceNumber', 400);
   }
 
+  const validItems = (invoiceData.items || []).filter(
+    (item) => item && (Number(item.quantity) > 0 || item.name)
+  );
+
+  if (validItems.length === 0) {
+    throw new InventoryError('No valid line items found in the invoice document.', 400);
+  }
+
   return await runInTransaction(async (session) => {
     const sessionOption = session ? { session } : {};
 
-    // 1. Deduplication check if messageId is supplied
+    // 1. Deduplication check: by messageId (if Gmail)
     if (messageId) {
       const existingInvoice = await Invoice.findOne({ messageId }).setOptions(sessionOption);
       if (existingInvoice) {
@@ -79,7 +87,24 @@ export const processRestock = async (invoiceData, messageId = null) => {
         return {
           invoice: existingInvoice,
           skipped: true,
-          reason: 'Duplicate messageId',
+          reason: 'Duplicate Gmail messageId',
+        };
+      }
+    }
+
+    // 2. Deduplication check: by invoiceNumber (case-insensitive)
+    const trimmedInvoiceNumber = (invoiceData.invoiceNumber || '').trim();
+    if (trimmedInvoiceNumber) {
+      const existingByNumber = await Invoice.findOne({
+        invoiceNumber: { $regex: new RegExp(`^${escapeRegex(trimmedInvoiceNumber)}$`, 'i') },
+      }).setOptions(sessionOption);
+
+      if (existingByNumber) {
+        console.log(`[InventoryService] Invoice "${trimmedInvoiceNumber}" already processed. Skipping duplicate restock.`);
+        return {
+          invoice: existingByNumber,
+          skipped: true,
+          reason: `Invoice #${trimmedInvoiceNumber} already exists in records`,
         };
       }
     }

@@ -33,12 +33,25 @@ export const uploadInvoice = async (req, res, next) => {
     // 2. Ingest into inventory via atomic transaction
     const result = await processRestock(extractedData);
 
+    if (result.skipped) {
+      return res.status(200).json({
+        success: true,
+        message: result.reason || `Invoice #${extractedData.invoiceNumber} was already processed previously. Duplicate restock avoided.`,
+        data: {
+          invoice: result.invoice,
+          itemsProcessed: [],
+          skipped: true,
+        },
+      });
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Invoice processed and inventory successfully restocked.',
       data: {
         invoice: result.invoice,
         itemsProcessed: result.itemsProcessed,
+        skipped: false,
       },
     });
   } catch (error) {

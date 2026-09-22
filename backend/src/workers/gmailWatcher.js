@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { getGmailClient } from '../config/googleAuth.js';
 import Invoice from '../models/Invoice.js';
+import ProcessedMail from '../models/ProcessedMail.js';
 import { parseInvoicePDF } from '../services/invoiceParser.js';
 import { processRestock } from '../services/inventoryService.js';
 
@@ -78,127 +79,163 @@ export const syncGmailInvoices = async () => {
         continue;
       }
 
-      // Search query for unread PDF attachments in INBOX (keyword agnostic, supports bills, POs, GST invoices)
-      const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment filename:pdf label:INBOX is:unread';
+      // Search query for PDF attachments in INBOX (both read and unread, keyword agnostic)
+      const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment filename:pdf label:INBOX';
       const listRes = await gmail.users.messages.list({
         userId: 'me',
         q: query,
-        maxResults: 20,
+        maxResults: 25,
       });
 
       const messages = listRes.data.messages || [];
-      console.log(`[GmailWatcher] Found ${messages.length} matching unread message(s) for token.`);
+      console.log(`[GmailWatcher] Found ${messages.length} matching message(s) in INBOX.`);
 
-    for (const msgRef of messages) {
-      const messageId = msgRef.id;
+      for (const msgRef of messages) {
+        const messageId = msgRef.id;
 
-      // 1. Verify if messageId already exists in MongoDB
-      const alreadyProcessed = await Invoice.findOne({ messageId });
-      if (alreadyProcessed) {
-        console.log(`[GmailWatcher] Message ${messageId} already exists in database. Skipping.`);
-        results.skipped += 1;
-        results.details.push({ messageId, status: 'skipped', reason: 'already_exists' });
-        continue;
-      }
+        // 1. Deduplication check: verify if messageId was already scanned/processed
+        const alreadyProcessed =
+          (await Invoice.findOne({ messageId })) ||
+          (await ProcessedMail.findOne({ messageId }));
 
-      try {
-        // 2. Fetch full message payload
-        const msgRes = await gmail.users.messages.get({
-          userId: 'me',
-          id: messageId,
-        });
-
-        const pdfParts = findPdfParts(msgRes.data.payload);
-
-        if (pdfParts.length === 0) {
-          console.log(`[GmailWatcher] Message ${messageId} did not contain downloadable PDF attachments.`);
+        if (alreadyProcessed) {
+          console.log(`[GmailWatcher] Message ${messageId} already scanned/processed. Skipping.`);
           results.skipped += 1;
-          results.details.push({ messageId, status: 'skipped', reason: 'no_pdf_attachment' });
+          results.details.push({
+            messageId,
+            status: 'skipped',
+            reason: alreadyProcessed.reason || 'already_processed',
+          });
           continue;
         }
 
-        console.log(`[GmailWatcher] Processing ${pdfParts.length} PDF(s) in message ${messageId}...`);
-
-        for (const part of pdfParts) {
-          // 3. Download PDF attachment into memory buffer
-          const attachmentRes = await gmail.users.messages.attachments.get({
+        try {
+          // 2. Fetch full message payload
+          const msgRes = await gmail.users.messages.get({
             userId: 'me',
-            messageId,
-            id: part.body.attachmentId,
+            id: messageId,
           });
 
-          const base64Data = attachmentRes.data.data;
-          const pdfBuffer = Buffer.from(base64Data, 'base64url');
+          const pdfParts = findPdfParts(msgRes.data.payload);
 
-          // 4. Pass buffer to Gemini PDF extraction service
-          console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${part.filename}"...`);
-          const extractedInvoice = await parseInvoicePDF(pdfBuffer);
-
-          // If PDF contains no inventory line items (e.g. non-invoice PDF), safely skip
-          if (!extractedInvoice || !extractedInvoice.items || extractedInvoice.items.length === 0) {
-            console.log(`[GmailWatcher] Attachment "${part.filename}" has no inventory items. Skipping.`);
+          if (pdfParts.length === 0) {
+            console.log(`[GmailWatcher] Message ${messageId} did not contain downloadable PDF attachments.`);
+            await ProcessedMail.updateOne(
+              { messageId },
+              { messageId, status: 'SKIPPED', reason: 'no_pdf_attachment' },
+              { upsert: true }
+            );
             results.skipped += 1;
-            results.details.push({
-              messageId,
-              filename: part.filename,
-              status: 'skipped',
-              reason: 'no_inventory_items',
-            });
+            results.details.push({ messageId, status: 'skipped', reason: 'no_pdf_attachment' });
             continue;
           }
 
-          // 5. Ingest into stock database atomically
-          console.log(`[GmailWatcher] Ingesting parsed invoice "${extractedInvoice.invoiceNumber}" into stock ledger...`);
-          const restockResult = await processRestock(extractedInvoice, messageId);
+          console.log(`[GmailWatcher] Processing ${pdfParts.length} PDF(s) in message ${messageId}...`);
 
-          results.processed += 1;
-          results.details.push({
-            messageId,
-            filename: part.filename,
-            invoiceNumber: extractedInvoice.invoiceNumber,
-            itemsCount: extractedInvoice.items.length,
-            status: 'success',
-            restockResult,
-          });
-        }
+          let messageHasValidInvoice = false;
 
-        // 6. Remove UNREAD label from message upon successful ingestion
-        await gmail.users.messages.modify({
-          userId: 'me',
-          id: messageId,
-          requestBody: {
-            removeLabelIds: ['UNREAD'],
-          },
-        });
-        console.log(`[GmailWatcher] Removed UNREAD label from message ${messageId}`);
-      } catch (msgError) {
-        console.error(`[GmailWatcher] Error processing message ${messageId}:`, msgError.message);
-        results.errors += 1;
-        results.details.push({
-          messageId,
-          status: 'error',
-          error: msgError.message,
-        });
+          for (const part of pdfParts) {
+            // 3. Download PDF attachment into memory buffer
+            const attachmentRes = await gmail.users.messages.attachments.get({
+              userId: 'me',
+              messageId,
+              id: part.body.attachmentId,
+            });
 
-        // Record failed invoice entry to prevent repeated poison pill processing
-        try {
-          await Invoice.findOneAndUpdate(
+            const base64Data = attachmentRes.data.data;
+            const pdfBuffer = Buffer.from(base64Data, 'base64url');
+
+            // 4. Pass buffer to Gemini PDF extraction service
+            console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${part.filename}"...`);
+            let extractedInvoice = null;
+            try {
+              extractedInvoice = await parseInvoicePDF(pdfBuffer);
+            } catch (parseErr) {
+              console.warn(`[GmailWatcher] Gemini parse error on "${part.filename}":`, parseErr.message);
+            }
+
+            // If PDF contains no inventory line items (e.g. non-invoice PDF), safely skip
+            if (!extractedInvoice || !extractedInvoice.items || extractedInvoice.items.length === 0) {
+              console.log(`[GmailWatcher] Attachment "${part.filename}" has no inventory items. Skipping.`);
+              results.skipped += 1;
+              results.details.push({
+                messageId,
+                filename: part.filename,
+                status: 'skipped',
+                reason: 'no_inventory_items',
+              });
+              continue;
+            }
+
+            // 5. Ingest into stock database atomically
+            console.log(`[GmailWatcher] Ingesting parsed invoice "${extractedInvoice.invoiceNumber}" into stock ledger...`);
+            const restockResult = await processRestock(extractedInvoice, messageId);
+
+            if (restockResult.skipped) {
+              console.log(`[GmailWatcher] Invoice "${extractedInvoice.invoiceNumber}" duplicate skipped: ${restockResult.reason}`);
+              results.skipped += 1;
+              results.details.push({
+                messageId,
+                filename: part.filename,
+                invoiceNumber: extractedInvoice.invoiceNumber,
+                status: 'skipped',
+                reason: restockResult.reason || 'duplicate_invoice',
+              });
+              continue;
+            }
+
+            messageHasValidInvoice = true;
+            results.processed += 1;
+            results.details.push({
+              messageId,
+              filename: part.filename,
+              invoiceNumber: extractedInvoice.invoiceNumber,
+              itemsCount: extractedInvoice.items.length,
+              status: 'success',
+              restockResult,
+            });
+          }
+
+          // Mark message as processed in ProcessedMail cache to avoid future re-scans
+          await ProcessedMail.updateOne(
             { messageId },
             {
               messageId,
-              invoiceNumber: `FAILED-${messageId}`,
-              vendor: 'Error during ingestion',
-              status: 'FAILED',
-              errorMessage: msgError.message,
+              status: messageHasValidInvoice ? 'PROCESSED' : 'NO_ITEMS',
+              reason: messageHasValidInvoice ? 'success' : 'no_inventory_items',
             },
             { upsert: true }
           );
-        } catch (dbErr) {
-          console.error(`[GmailWatcher] Failed to record error state for ${messageId}:`, dbErr.message);
+
+          // 6. Attempt to remove UNREAD label from message if present
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: messageId,
+              requestBody: {
+                removeLabelIds: ['UNREAD'],
+              },
+            });
+            console.log(`[GmailWatcher] Cleaned UNREAD label from message ${messageId}`);
+          } catch (labelErr) {
+            // Already read or label modification not permitted
+          }
+        } catch (msgError) {
+          console.error(`[GmailWatcher] Error processing message ${messageId}:`, msgError.message);
+          await ProcessedMail.updateOne(
+            { messageId },
+            { messageId, status: 'ERROR', reason: msgError.message },
+            { upsert: true }
+          );
+          results.errors += 1;
+          results.details.push({
+            messageId,
+            status: 'error',
+            error: msgError.message,
+          });
         }
       }
     }
-  }
   } catch (error) {
     console.error('[GmailWatcher] Global sync cycle failure:', error.message);
     results.status = 'error';
