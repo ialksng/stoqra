@@ -83,12 +83,19 @@ export const processRestock = async (invoiceData, messageId = null) => {
     if (messageId) {
       const existingInvoice = await Invoice.findOne({ messageId }).setOptions(sessionOption);
       if (existingInvoice) {
-        console.log(`[InventoryService] Invoice with messageId ${messageId} already processed. Skipping.`);
-        return {
-          invoice: existingInvoice,
-          skipped: true,
-          reason: 'Duplicate Gmail messageId',
-        };
+        const itemSkus = (existingInvoice.items || []).map((i) => i.sku).filter(Boolean);
+        const catalogCount = itemSkus.length > 0 ? await Item.countDocuments({ sku: { $in: itemSkus } }).setOptions(sessionOption) : 0;
+        if (catalogCount > 0) {
+          console.log(`[InventoryService] Invoice with messageId ${messageId} already processed and catalog items present. Skipping.`);
+          return {
+            invoice: existingInvoice,
+            skipped: true,
+            reason: 'Duplicate Gmail messageId',
+          };
+        } else {
+          console.log(`[InventoryService] Invoice messageId ${messageId} found but catalog items were removed. Replacing invoice and restocking items.`);
+          await Invoice.deleteOne({ _id: existingInvoice._id }).setOptions(sessionOption);
+        }
       }
     }
 
@@ -100,12 +107,19 @@ export const processRestock = async (invoiceData, messageId = null) => {
       }).setOptions(sessionOption);
 
       if (existingByNumber) {
-        console.log(`[InventoryService] Invoice "${trimmedInvoiceNumber}" already processed. Skipping duplicate restock.`);
-        return {
-          invoice: existingByNumber,
-          skipped: true,
-          reason: `Invoice #${trimmedInvoiceNumber} already exists in records`,
-        };
+        const itemSkus = (existingByNumber.items || []).map((i) => i.sku).filter(Boolean);
+        const catalogCount = itemSkus.length > 0 ? await Item.countDocuments({ sku: { $in: itemSkus } }).setOptions(sessionOption) : 0;
+        if (catalogCount > 0) {
+          console.log(`[InventoryService] Invoice "${trimmedInvoiceNumber}" already processed. Skipping duplicate restock.`);
+          return {
+            invoice: existingByNumber,
+            skipped: true,
+            reason: `Invoice #${trimmedInvoiceNumber} already exists in records`,
+          };
+        } else {
+          console.log(`[InventoryService] Invoice "${trimmedInvoiceNumber}" found in records but items were missing from catalog. Replacing invoice and restocking items.`);
+          await Invoice.deleteOne({ _id: existingByNumber._id }).setOptions(sessionOption);
+        }
       }
     }
 

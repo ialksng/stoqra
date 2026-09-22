@@ -246,8 +246,9 @@ export const getInvoices = async (req, res, next) => {
  */
 export const triggerGmailSync = async (req, res, next) => {
   try {
-    console.log('[InventoryController] Manual trigger received for Gmail sync...');
-    const result = await syncGmailInvoices();
+    const forceRescan = req.body?.forceRescan === true || req.query?.force === 'true';
+    console.log(`[InventoryController] Manual trigger received for Gmail sync (forceRescan=${forceRescan})...`);
+    const result = await syncGmailInvoices({ forceRescan });
 
     return res.status(200).json({
       success: true,

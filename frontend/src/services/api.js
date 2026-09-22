@@ -298,12 +298,14 @@ export const resetDatabase = async () => {
   return handleResponse(res);
 };
 
-export const triggerGmailSync = async () => {
+export const triggerGmailSync = async (options = {}) => {
   const res = await fetch(`${API_PREFIX}/worker/sync-gmail`, {
     method: 'POST',
     headers: {
+      'Content-Type': 'application/json',
       ...getAuthHeaders(),
     },
+    body: JSON.stringify(options),
   });
   return handleResponse(res);
 };

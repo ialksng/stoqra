@@ -41,6 +41,10 @@ export const invoiceExtractionSchema = {
             type: Type.NUMBER,
             description: 'Unit price/cost paid per item',
           },
+          category: {
+            type: Type.STRING,
+            description: 'Product category classification (e.g. Electronics, Hardware, FMCG, Raw Materials, Apparel, Office Supplies, General)',
+          },
         },
         required: ['sku', 'name', 'quantity', 'unitCost'],
       },
@@ -53,8 +57,10 @@ export const invoiceExtractionSchema = {
  * Multi-model fallback list in order of preference
  */
 const getModelQueue = () => {
+  const customModel = (process.env.GEMINI_MODEL || '').trim();
+  const isValidCustom = customModel && /^gemini-(1\.5|2\.0|2\.5)-(flash|pro)/i.test(customModel);
   const models = [
-    process.env.GEMINI_MODEL,
+    isValidCustom ? customModel : null,
     'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash',
@@ -65,11 +71,20 @@ const getModelQueue = () => {
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const withTimeout = (promise, ms = 25000) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout: PDF extraction took longer than ${ms / 1000}s`)), ms)
+    ),
+  ]);
+};
+
 /**
  * Parse a PDF invoice buffer using Google GenAI (Gemini) structured output
  * Automatically retries with backoff and falls back across models on 503/429 spikes.
  * @param {Buffer} pdfBuffer - PDF file buffer
- * @returns {Promise<{ invoiceNumber: string, vendorName: string, totalAmount: number, items: Array<{ sku: string, name: string, quantity: number, unitCost: number }> }>}
+ * @returns {Promise<{ invoiceNumber: string, vendorName: string, totalAmount: number, items: Array<{ sku: string, name: string, quantity: number, unitCost: number, category: string }> }>}
  */
 export const parseInvoicePDF = async (pdfBuffer) => {
   if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
@@ -82,7 +97,7 @@ Extract all structured data from this PDF invoice with high accuracy:
 - invoiceNumber: Unique invoice or bill number (e.g. INV-10023, GST/24-25/001)
 - vendorName: Name of the supplier or business entity issuing the invoice
 - totalAmount: Final total payable invoice amount in Rupees/INR (including applicable CGST, SGST, IGST)
-- items: Extract every line item with its SKU (or HSN/SAC code / product code), clear item description, quantity delivered, and unit cost.
+- items: Extract every line item with its SKU (or HSN/SAC code / product code), clear item description, quantity delivered, unit cost, and a sensible product category (e.g. Electronics, Raw Materials, FMCG, Hardware, Apparel, Office Supplies, General).
 Ensure all amounts and quantities are positive numerical values without currency symbols.`;
 
   const modelsToTry = getModelQueue();
@@ -94,22 +109,25 @@ Ensure all amounts and quantities are positive numerical values without currency
       try {
         console.log(`[InvoiceParser] Attempting PDF extraction using model "${modelName}" (attempt ${attempt}/2)...`);
 
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: [
-            {
-              inlineData: {
-                mimeType: 'application/pdf',
-                data: base64Data,
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: modelName,
+            contents: [
+              {
+                inlineData: {
+                  mimeType: 'application/pdf',
+                  data: base64Data,
+                },
               },
+              { text: prompt },
+            ],
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: invoiceExtractionSchema,
             },
-            { text: prompt },
-          ],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: invoiceExtractionSchema,
-          },
-        });
+          }),
+          25000
+        );
 
         const outputText = response.text;
         if (!outputText) {
@@ -137,6 +155,7 @@ Ensure all amounts and quantities are positive numerical values without currency
                 name: String(item.name || `Item ${idx + 1}`).trim(),
                 quantity: Math.max(0, Number(item.quantity) || 1),
                 unitCost: Math.max(0, Number(item.unitCost) || 0),
+                category: String(item.category || 'General').trim(),
               }))
             : [],
         };
@@ -151,11 +170,22 @@ Ensure all amounts and quantities are positive numerical values without currency
           errMsg.includes('UNAVAILABLE') ||
           errMsg.includes('high demand') ||
           errMsg.includes('429') ||
-          errMsg.includes('RESOURCE_EXHAUSTED');
+          errMsg.includes('RESOURCE_EXHAUSTED') ||
+          errMsg.includes('Timeout');
 
         console.warn(
           `[InvoiceParser] Model "${modelName}" attempt ${attempt} failed: ${errMsg}`
         );
+
+        // If model doesn't exist or is not supported (404/NOT_FOUND), don't retry attempt 2
+        if (
+          errMsg.includes('not found') ||
+          errMsg.includes('NOT_FOUND') ||
+          errMsg.includes('404') ||
+          errMsg.includes('unsupported')
+        ) {
+          break;
+        }
 
         if (isTransient && attempt === 1) {
           // Wait 1.5s before second attempt on same model

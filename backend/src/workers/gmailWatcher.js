@@ -1,12 +1,14 @@
 import cron from 'node-cron';
 import { getGmailClient } from '../config/googleAuth.js';
 import Invoice from '../models/Invoice.js';
+import Item from '../models/Item.js';
 import ProcessedMail from '../models/ProcessedMail.js';
 import { parseInvoicePDF } from '../services/invoiceParser.js';
 import { processRestock } from '../services/inventoryService.js';
 
 let cronTask = null;
 let isSyncInProgress = false;
+let syncStartTime = null;
 
 /**
  * Recursively find all PDF attachment parts in a Gmail message payload
@@ -47,21 +49,32 @@ const findPdfParts = (payload) => {
 
 /**
  * Execute Gmail invoice ingestion sync
- * @returns {Promise<{ processed: number, skipped: number, errors: number, details: Array }>}
+ * @param {Object} [options] - Sync configuration options
+ * @param {boolean} [options.forceRescan] - Force re-evaluation of previously scanned emails
+ * @returns {Promise<{ status?: string, processed: number, skipped: number, errors: number, totalEmailsFound: number, details: Array }>}
  */
-export const syncGmailInvoices = async () => {
+export const syncGmailInvoices = async (options = {}) => {
+  const forceRescan = options?.forceRescan === true;
+
   if (isSyncInProgress) {
-    console.log('[GmailWatcher] Sync already in progress, skipping concurrent trigger.');
-    return { status: 'in_progress', message: 'Sync already in progress' };
+    if (syncStartTime && Date.now() - syncStartTime > 90000) {
+      console.warn('[GmailWatcher] Stale sync lock (>90s) detected. Forcing lock release.');
+      isSyncInProgress = false;
+    } else {
+      console.log('[GmailWatcher] Sync already in progress, skipping concurrent trigger.');
+      return { status: 'in_progress', message: 'Sync already in progress' };
+    }
   }
 
   isSyncInProgress = true;
-  console.log('[GmailWatcher] Starting Gmail invoice polling cycle...');
+  syncStartTime = Date.now();
+  console.log(`[GmailWatcher] Starting Gmail invoice polling cycle (forceRescan=${forceRescan})...`);
 
   const results = {
     processed: 0,
     skipped: 0,
     errors: 0,
+    totalEmailsFound: 0,
     details: [],
   };
 
@@ -74,6 +87,7 @@ export const syncGmailInvoices = async () => {
     const errorMsg = 'Missing Gmail OAuth credentials. Ensure GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN are set in .env';
     console.warn(`[GmailWatcher] Skipping poll: ${errorMsg}`);
     isSyncInProgress = false;
+    syncStartTime = null;
     return { status: 'skipped', reason: errorMsg };
   }
 
@@ -87,40 +101,80 @@ export const syncGmailInvoices = async () => {
         continue;
       }
 
+      // 1. Clean cache if force rescan or purge transient errors
+      if (forceRescan) {
+        console.log('[GmailWatcher] Force rescan active: resetting processed mail cache...');
+        await ProcessedMail.deleteMany({}).catch(() => {});
+      } else {
+        await ProcessedMail.deleteMany({ status: { $in: ['ERROR', 'NO_ITEMS'] } }).catch(() => {});
+      }
+
       // Search query for PDF attachments across mailbox (read and unread, all categories, excluding trash/spam)
-      const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment filename:pdf -in:trash -in:spam';
-      const listRes = await gmail.users.messages.list({
+      const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment -in:trash -in:spam';
+      console.log(`[GmailWatcher] Executing query "${query}" (limit 50)...`);
+      let listRes = await gmail.users.messages.list({
         userId: 'me',
         q: query,
-        maxResults: 25,
+        maxResults: 50,
       });
 
-      const messages = listRes.data.messages || [];
-      console.log(`[GmailWatcher] Found ${messages.length} matching message(s) in INBOX.`);
+      let messages = listRes.data.messages || [];
 
-      // Clean up transient error states from ProcessedMail so previously failed messages can be re-evaluated
-      await ProcessedMail.deleteMany({ status: { $in: ['ERROR', 'NO_ITEMS'] } }).catch(() => {});
+      // Fallback: If 0 messages found and user has not set a custom query, check recent inbox emails
+      if (messages.length === 0 && !process.env.GMAIL_SEARCH_QUERY) {
+        console.log('[GmailWatcher] No messages found with attachment query. Checking recent inbox emails as fallback...');
+        listRes = await gmail.users.messages.list({
+          userId: 'me',
+          q: 'in:inbox -in:trash -in:spam',
+          maxResults: 25,
+        });
+        messages = listRes.data.messages || [];
+      }
+
+      results.totalEmailsFound = messages.length;
+      console.log(`[GmailWatcher] Found ${messages.length} matching message(s) in mailbox.`);
 
       for (const msgRef of messages) {
         const messageId = msgRef.id;
 
-        // 1. Deduplication check: verify if messageId was already successfully processed or duplicate
-        const alreadyProcessed =
-          (await Invoice.findOne({ messageId })) ||
-          (await ProcessedMail.findOne({
-            messageId,
-            status: { $in: ['PROCESSED', 'DUPLICATE'] },
-          }));
+        // 2. Deduplication check
+        if (forceRescan) {
+          const existingInv = await Invoice.findOne({ messageId });
+          if (existingInv) {
+            const itemSkus = (existingInv.items || []).map((i) => i.sku).filter(Boolean);
+            const count = itemSkus.length > 0 ? await Item.countDocuments({ sku: { $in: itemSkus } }) : 0;
+            if (count > 0) {
+              console.log(`[GmailWatcher] Force rescan: Invoice #${existingInv.invoiceNumber} already in catalog. Skipping.`);
+              results.skipped += 1;
+              results.details.push({
+                messageId,
+                status: 'skipped',
+                reason: `Invoice #${existingInv.invoiceNumber} already in catalog`,
+              });
+              continue;
+            } else {
+              console.log(`[GmailWatcher] Force rescan: Invoice #${existingInv.invoiceNumber} catalog items removed. Deleting stale invoice to re-ingest.`);
+              await Invoice.deleteOne({ _id: existingInv._id });
+            }
+          }
+        } else {
+          const alreadyProcessed =
+            (await Invoice.findOne({ messageId })) ||
+            (await ProcessedMail.findOne({
+              messageId,
+              status: { $in: ['PROCESSED', 'DUPLICATE'] },
+            }));
 
-        if (alreadyProcessed) {
-          console.log(`[GmailWatcher] Message ${messageId} already processed. Skipping.`);
-          results.skipped += 1;
-          results.details.push({
-            messageId,
-            status: 'skipped',
-            reason: alreadyProcessed.reason || 'already_processed',
-          });
-          continue;
+          if (alreadyProcessed) {
+            console.log(`[GmailWatcher] Message ${messageId} already processed. Skipping.`);
+            results.skipped += 1;
+            results.details.push({
+              messageId,
+              status: 'skipped',
+              reason: alreadyProcessed.reason || 'already_processed',
+            });
+            continue;
+          }
         }
 
         try {
@@ -312,6 +366,7 @@ export const syncGmailInvoices = async () => {
     }
   } finally {
     isSyncInProgress = false;
+    syncStartTime = null;
   }
 
   console.log(
