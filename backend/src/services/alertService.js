@@ -35,7 +35,7 @@ export const getTransporter = () => {
  * @returns {Promise<boolean>}
  */
 export const dispatchLowStockAlert = async (item) => {
-  const adminEmail = process.env.ADMIN_ALERT_EMAIL;
+  const adminEmail = process.env.ADMIN_EMAILS || process.env.ADMIN_ALERT_EMAIL;
   const senderEmail = process.env.ALERT_SENDER_EMAIL || 'inventory-alerts@stoqra.local';
 
   const recommendedRestock = Math.max((item.reorderLevel * 2) - item.currentStock, 10);

@@ -56,26 +56,38 @@ export const syncGmailInvoices = async () => {
     details: [],
   };
 
-  let gmail;
-  try {
-    gmail = getGmailClient();
-  } catch (error) {
-    console.warn(`[GmailWatcher] Skipping poll: ${error.message}`);
+  const refreshTokens = (process.env.GMAIL_REFRESH_TOKEN || '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  if (refreshTokens.length === 0) {
+    const errorMsg = 'Missing Gmail OAuth credentials. Ensure GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN are set in .env';
+    console.warn(`[GmailWatcher] Skipping poll: ${errorMsg}`);
     isSyncInProgress = false;
-    return { status: 'skipped', reason: error.message };
+    return { status: 'skipped', reason: errorMsg };
   }
 
   try {
-    // Search query for unread PDF invoices in INBOX
-    const query = 'has:attachment filename:pdf label:INBOX is:unread "invoice"';
-    const listRes = await gmail.users.messages.list({
-      userId: 'me',
-      q: query,
-      maxResults: 20,
-    });
+    for (const token of refreshTokens) {
+      let gmail;
+      try {
+        gmail = getGmailClient(token);
+      } catch (clientErr) {
+        console.warn(`[GmailWatcher] Skipping token due to auth error: ${clientErr.message}`);
+        continue;
+      }
 
-    const messages = listRes.data.messages || [];
-    console.log(`[GmailWatcher] Found ${messages.length} matching unread message(s) in Gmail.`);
+      // Search query for unread PDF invoices in INBOX
+      const query = 'has:attachment filename:pdf label:INBOX is:unread "invoice"';
+      const listRes = await gmail.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults: 20,
+      });
+
+      const messages = listRes.data.messages || [];
+      console.log(`[GmailWatcher] Found ${messages.length} matching unread message(s) for token.`);
 
     for (const msgRef of messages) {
       const messageId = msgRef.id;
@@ -173,6 +185,7 @@ export const syncGmailInvoices = async () => {
         }
       }
     }
+  }
   } catch (error) {
     console.error('[GmailWatcher] Global sync cycle failure:', error.message);
     results.status = 'error';

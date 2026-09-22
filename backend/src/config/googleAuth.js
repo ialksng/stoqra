@@ -4,11 +4,11 @@ import { google } from 'googleapis';
  * Configure and return Google OAuth2 client with refresh token credentials
  * @returns {google.auth.OAuth2}
  */
-export const getOAuth2Client = () => {
+export const getOAuth2Client = (customRefreshToken = null) => {
   const clientId = process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
   const redirectUri = process.env.GMAIL_REDIRECT_URI || 'https://developers.google.com/oauthplayground';
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+  const refreshToken = customRefreshToken || process.env.GMAIL_REFRESH_TOKEN;
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
@@ -26,10 +26,11 @@ export const getOAuth2Client = () => {
 
 /**
  * Get configured Gmail API v1 client
+ * @param {string|null} customRefreshToken
  * @returns {import('googleapis').gmail_v1.Gmail}
  */
-export const getGmailClient = () => {
-  const auth = getOAuth2Client();
+export const getGmailClient = (customRefreshToken = null) => {
+  const auth = getOAuth2Client(customRefreshToken);
   return google.gmail({ version: 'v1', auth });
 };
 
