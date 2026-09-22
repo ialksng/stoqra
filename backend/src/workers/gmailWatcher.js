@@ -78,8 +78,8 @@ export const syncGmailInvoices = async () => {
         continue;
       }
 
-      // Search query for unread PDF invoices in INBOX
-      const query = 'has:attachment filename:pdf label:INBOX is:unread "invoice"';
+      // Search query for unread PDF attachments in INBOX (keyword agnostic, supports bills, POs, GST invoices)
+      const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment filename:pdf label:INBOX is:unread';
       const listRes = await gmail.users.messages.list({
         userId: 'me',
         q: query,
@@ -133,6 +133,19 @@ export const syncGmailInvoices = async () => {
           // 4. Pass buffer to Gemini PDF extraction service
           console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${part.filename}"...`);
           const extractedInvoice = await parseInvoicePDF(pdfBuffer);
+
+          // If PDF contains no inventory line items (e.g. non-invoice PDF), safely skip
+          if (!extractedInvoice || !extractedInvoice.items || extractedInvoice.items.length === 0) {
+            console.log(`[GmailWatcher] Attachment "${part.filename}" has no inventory items. Skipping.`);
+            results.skipped += 1;
+            results.details.push({
+              messageId,
+              filename: part.filename,
+              status: 'skipped',
+              reason: 'no_inventory_items',
+            });
+            continue;
+          }
 
           // 5. Ingest into stock database atomically
           console.log(`[GmailWatcher] Ingesting parsed invoice "${extractedInvoice.invoiceNumber}" into stock ledger...`);
