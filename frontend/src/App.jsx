@@ -18,6 +18,7 @@ import {
   fetchTransactions,
   fetchInvoices,
 } from './services/api.js';
+import { exportCompleteReportToExcel } from './utils/excelExport.js';
 
 function Dashboard() {
   const { user } = useAuth();
@@ -157,8 +158,22 @@ function Dashboard() {
     <div className="app-container">
       {/* Top Navbar */}
       <Navbar
-        onOpenUpload={() => setUploadModalOpen(false || true)}
+        onOpenUpload={() => setUploadModalOpen(true)}
         onOpenSale={handleOpenSaleModal}
+        onExportReport={() => {
+          if (items.length === 0 && invoices.length === 0 && transactions.length === 0) {
+            addToast('No data available to export yet. Restock items first.', 'info');
+            return;
+          }
+          exportCompleteReportToExcel({
+            items,
+            velocity: velocityData?.items || [],
+            invoices,
+            transactions,
+            days: velocityDays,
+          });
+          addToast('Complete business report downloaded as Excel (.xlsx)!', 'success');
+        }}
         onSyncComplete={(msg, type) => {
           addToast(msg, type);
           refreshAllData();

@@ -1,6 +1,7 @@
 import React from 'react';
-import { FileText, CheckCircle2, XCircle } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, FileSpreadsheet } from 'lucide-react';
 import { formatINR, formatIndianDate } from '../utils/formatters.js';
+import { exportInvoicesToExcel } from '../utils/excelExport.js';
 
 export const InvoicesView = ({ invoices, loading }) => {
   return (
@@ -10,6 +11,16 @@ export const InvoicesView = ({ invoices, loading }) => {
           <FileText size={18} color="#2563eb" />
           Ingested Invoices Register (GST & Tax Invoices)
         </div>
+
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => exportInvoicesToExcel(invoices)}
+          disabled={!invoices || invoices.length === 0}
+          title="Export invoices list to Excel (.xlsx)"
+        >
+          <FileSpreadsheet size={14} />
+          Export Excel
+        </button>
       </div>
 
       <div style={{ overflowX: 'auto' }}>

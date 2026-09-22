@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Package, Mail, UploadCloud, ShoppingCart, Loader2, LogOut, User as UserIcon } from 'lucide-react';
+import { Package, Mail, UploadCloud, ShoppingCart, Loader2, LogOut, User as UserIcon, FileSpreadsheet } from 'lucide-react';
 import { triggerGmailSync } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete }) => {
+export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete, onExportReport }) => {
   const [syncing, setSyncing] = useState(false);
   const { user, logout } = useAuth();
 
@@ -72,6 +72,17 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete }) => {
           <UploadCloud size={16} />
           Upload Invoice PDF
         </button>
+
+        {onExportReport && (
+          <button
+            className="btn btn-secondary"
+            onClick={onExportReport}
+            title="Export complete business report to Excel (.xlsx)"
+          >
+            <FileSpreadsheet size={16} />
+            Export Excel
+          </button>
+        )}
 
         {/* User Profile & Logout */}
         {user && (

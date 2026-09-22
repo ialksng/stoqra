@@ -1,6 +1,7 @@
 import React from 'react';
-import { Activity, Flame, IndianRupee } from 'lucide-react';
+import { Activity, Flame, IndianRupee, FileSpreadsheet } from 'lucide-react';
 import { formatINR, formatIndianNumber, formatIndianDate } from '../utils/formatters.js';
+import { exportVelocityToExcel } from '../utils/excelExport.js';
 
 export const SalesVelocityView = ({ velocityData, days, setDays, loading }) => {
   const summary = velocityData?.summary || {
@@ -70,6 +71,16 @@ export const SalesVelocityView = ({ velocityData, days, setDays, loading }) => {
               <option value={30}>Last 30 Days</option>
               <option value={60}>Last 60 Days</option>
             </select>
+
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => exportVelocityToExcel(items, days)}
+              disabled={!items || items.length === 0}
+              title="Export sales velocity report to Excel (.xlsx)"
+            >
+              <FileSpreadsheet size={14} />
+              Export Excel
+            </button>
           </div>
         </div>
 

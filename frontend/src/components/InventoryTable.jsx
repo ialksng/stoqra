@@ -1,6 +1,7 @@
 import React from 'react';
-import { Search, Filter, ShoppingCart, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Search, Filter, ShoppingCart, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import { formatINR, formatIndianNumber } from '../utils/formatters.js';
+import { exportInventoryToExcel } from '../utils/excelExport.js';
 
 export const InventoryTable = ({
   items,
@@ -70,6 +71,16 @@ export const InventoryTable = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => exportInventoryToExcel(items)}
+            disabled={!items || items.length === 0}
+            title="Export current inventory catalog to Excel (.xlsx)"
+          >
+            <FileSpreadsheet size={14} />
+            Export Excel
+          </button>
+
           <button className="btn btn-secondary btn-sm" onClick={onRefresh} title="Refresh Table">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             Refresh

@@ -1,6 +1,7 @@
 import React from 'react';
-import { History, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { History, ArrowDownLeft, ArrowUpRight, FileSpreadsheet } from 'lucide-react';
 import { formatINR, formatIndianDate, formatIndianNumber } from '../utils/formatters.js';
+import { exportTransactionsToExcel } from '../utils/excelExport.js';
 
 export const TransactionsView = ({ transactions, loading, typeFilter, setTypeFilter }) => {
   return (
@@ -24,6 +25,16 @@ export const TransactionsView = ({ transactions, loading, typeFilter, setTypeFil
             <option value="SALE">Outbound Sales</option>
             <option value="ADJUSTMENT">Adjustments</option>
           </select>
+
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => exportTransactionsToExcel(transactions)}
+            disabled={!transactions || transactions.length === 0}
+            title="Export transaction ledger to Excel (.xlsx)"
+          >
+            <FileSpreadsheet size={14} />
+            Export Excel
+          </button>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ let isSyncInProgress = false;
 
 /**
  * Recursively find all PDF attachment parts in a Gmail message payload
+ * Supports both standard attachments (attachmentId) and embedded base64 data (body.data)
  * @param {Object} payload - Gmail message payload
  * @returns {Array} List of PDF parts
  */
@@ -19,10 +20,17 @@ const findPdfParts = (payload) => {
   const traverse = (part) => {
     if (!part) return;
 
-    const isPdfFilename = part.filename && part.filename.toLowerCase().endsWith('.pdf');
-    const isPdfMime = part.mimeType === 'application/pdf';
+    const filename = (part.filename || '').toLowerCase();
+    const mime = (part.mimeType || '').toLowerCase();
+    const isPdf =
+      filename.endsWith('.pdf') ||
+      mime === 'application/pdf' ||
+      mime === 'application/x-pdf' ||
+      (mime === 'application/octet-stream' && filename.endsWith('.pdf'));
 
-    if ((isPdfFilename || isPdfMime) && part.body && part.body.attachmentId) {
+    const hasContent = part.body && (part.body.attachmentId || part.body.data);
+
+    if (isPdf && hasContent) {
       pdfParts.push(part);
     }
 
@@ -93,13 +101,16 @@ export const syncGmailInvoices = async () => {
       for (const msgRef of messages) {
         const messageId = msgRef.id;
 
-        // 1. Deduplication check: verify if messageId was already scanned/processed
+        // 1. Deduplication check: verify if messageId was already successfully processed or duplicate
         const alreadyProcessed =
           (await Invoice.findOne({ messageId })) ||
-          (await ProcessedMail.findOne({ messageId }));
+          (await ProcessedMail.findOne({
+            messageId,
+            status: { $in: ['PROCESSED', 'DUPLICATE'] },
+          }));
 
         if (alreadyProcessed) {
-          console.log(`[GmailWatcher] Message ${messageId} already scanned/processed. Skipping.`);
+          console.log(`[GmailWatcher] Message ${messageId} already processed. Skipping.`);
           results.skipped += 1;
           results.details.push({
             messageId,
@@ -135,18 +146,28 @@ export const syncGmailInvoices = async () => {
           let messageHasValidInvoice = false;
 
           for (const part of pdfParts) {
-            // 3. Download PDF attachment into memory buffer
-            const attachmentRes = await gmail.users.messages.attachments.get({
-              userId: 'me',
-              messageId,
-              id: part.body.attachmentId,
-            });
+            // 3. Download PDF attachment into memory buffer (either direct data or via attachment API)
+            let pdfBuffer = null;
+            if (part.body && part.body.data) {
+              pdfBuffer = Buffer.from(part.body.data, 'base64url');
+            } else if (part.body && part.body.attachmentId) {
+              const attachmentRes = await gmail.users.messages.attachments.get({
+                userId: 'me',
+                messageId,
+                id: part.body.attachmentId,
+              });
+              if (attachmentRes.data && attachmentRes.data.data) {
+                pdfBuffer = Buffer.from(attachmentRes.data.data, 'base64url');
+              }
+            }
 
-            const base64Data = attachmentRes.data.data;
-            const pdfBuffer = Buffer.from(base64Data, 'base64url');
+            if (!pdfBuffer || pdfBuffer.length === 0) {
+              console.warn(`[GmailWatcher] Could not retrieve buffer for attachment "${part.filename}". Skipping.`);
+              continue;
+            }
 
             // 4. Pass buffer to Gemini PDF extraction service
-            console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${part.filename}"...`);
+            console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${part.filename}" (${pdfBuffer.length} bytes)...`);
             let extractedInvoice = null;
             try {
               extractedInvoice = await parseInvoicePDF(pdfBuffer);

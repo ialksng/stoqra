@@ -1,0 +1,65 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 772 >>
+stream
+BT
+/F1 18 Tf
+50 750 Td
+(TAX INVOICE / BILL OF SUPPLY) Tj
+0 -28 Td
+/F1 12 Tf
+(Supplier: Acme Electronics Pvt Ltd) Tj
+0 -16 Td
+(GSTIN: 07AAAAA0000A1Z5) Tj
+0 -16 Td
+(Invoice No: INV-2026-0891) Tj
+0 -16 Td
+(Invoice Date: 22-09-2026) Tj
+0 -26 Td
+/F1 13 Tf
+(Billed To: Retail Store India) Tj
+0 -26 Td
+/F1 11 Tf
+(Items Purchased:) Tj
+0 -18 Td
+(1. SKU: TECH-SPK-01  | Wireless Bluetooth Speaker 20W | Qty: 15 | Rate: Rs 1,200) Tj
+0 -16 Td
+(2. SKU: TECH-CBL-65  | 65W Fast Charging Type-C Cable | Qty: 40 | Rate: Rs 250) Tj
+0 -16 Td
+(3. SKU: TECH-PB-20K  | 20000mAh Power Bank QuickCharge | Qty: 10 | Rate: Rs 1,800) Tj
+0 -28 Td
+/F1 12 Tf
+(Subtotal: Rs 46,000.00) Tj
+0 -16 Td
+(Integrated GST (IGST 18%): Rs 8,280.00) Tj
+0 -18 Td
+/F1 14 Tf
+(Total Payable Amount: Rs 54,280.00) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000060 00000 n 
+0000000117 00000 n 
+0000000228 00000 n 
+00000001072 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1172
+%%EOF
