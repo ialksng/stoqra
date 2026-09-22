@@ -193,3 +193,125 @@ export const exportCompleteReportToExcel = ({
 
   downloadWorkbook(workbook, 'Stoqra_Complete_Business_Report');
 };
+
+/**
+ * Export Comprehensive Multi-Tab Analytics Report to Excel (.xlsx)
+ * @param {Object} params
+ * @param {Object} params.analytics - Comprehensive analytics object from API
+ * @param {number} params.days - Analysis timeframe in days
+ */
+export const exportComprehensiveAnalyticsToExcel = ({ analytics, days = 30 }) => {
+  if (!analytics) return;
+
+  const workbook = XLSX.utils.book_new();
+  const kpi = analytics.kpi || {};
+
+  // 1. Executive Summary Sheet
+  const summaryData = [
+    { Metric: 'Timeframe Analyzed', Value: `${days} Days` },
+    { Metric: 'Total Catalog Valuation (₹)', Value: kpi.totalValuation || 0 },
+    { Metric: 'Total Inventory Stock Units', Value: kpi.totalStockUnits || 0 },
+    { Metric: 'Total Active SKUs Tracked', Value: kpi.totalSkus || 0 },
+    { Metric: 'Healthy Stock SKUs', Value: kpi.healthyStockCount || 0 },
+    { Metric: 'Low Stock SKUs (Reorder Needed)', Value: kpi.lowStockCount || 0 },
+    { Metric: 'Out of Stock SKUs', Value: kpi.outOfStockCount || 0 },
+    { Metric: `Period Sales Revenue (₹)`, Value: kpi.periodRevenue || 0 },
+    { Metric: `Period Units Sold`, Value: kpi.periodUnitsSold || 0 },
+    { Metric: `Period Realized Gross Profit (₹)`, Value: kpi.realizedGrossMargin || 0 },
+    { Metric: 'Gross Profit Margin (%)', Value: `${kpi.grossMarginPercent || 0}%` },
+    { Metric: `Period Procurement Spend (₹)`, Value: kpi.periodProcurementSpend || 0 },
+    { Metric: `Net Operational Cash Flow (₹)`, Value: kpi.netCashFlow || 0 },
+    { Metric: 'Completed Sales Orders', Value: kpi.salesCount || 0 },
+    { Metric: 'Processed Supplier Invoices', Value: kpi.invoiceCount || 0 },
+  ];
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryData), 'Executive_Summary');
+
+  // 2. Category Analytics Sheet
+  const categoryData = (analytics.categories || []).map((cat, idx) => ({
+    'S.No': idx + 1,
+    'Category Name': cat.category,
+    'SKU Count': cat.skuCount,
+    'Stock Units': cat.totalUnits,
+    'Inventory Valuation (₹)': cat.totalValuation,
+    'Valuation Share (%)': `${cat.percentValuation}%`,
+    [`Period Revenue (${days}d ₹)`]: cat.periodRevenue,
+    [`Units Sold (${days}d)`]: cat.periodUnitsSold,
+  }));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(categoryData), 'Category_Analytics');
+
+  // 3. Supplier Intelligence Sheet
+  const supplierData = (analytics.suppliers || []).map((supp, idx) => ({
+    'S.No': idx + 1,
+    'Supplier / Vendor': supp.supplier,
+    'Total Spend (₹)': supp.totalSpend,
+    'Invoices Count': supp.invoiceCount,
+    'SKUs Supplied': supp.skuCount,
+    'Last Invoice Date': supp.lastInvoiceDate ? formatIndianDate(supp.lastInvoiceDate) : 'N/A',
+  }));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(supplierData), 'Supplier_Intelligence');
+
+  // 4. Selling Orders & Payments Sheet
+  const ordersData = (analytics.recentOrders || []).map((ord, idx) => ({
+    'S.No': idx + 1,
+    'Order Date': ord.date ? formatIndianDate(ord.date) : 'N/A',
+    'Order Reference': ord.orderId,
+    'SKU': ord.sku,
+    'Product Name': ord.productName,
+    'Category': ord.category,
+    'Quantity Sold': ord.quantity,
+    'Unit Price (₹)': ord.unitPrice,
+    'Payment Mode': ord.paymentMode,
+    'Money Collected (₹)': ord.paymentAmount,
+    'Customer Name': ord.customerName || 'Walk-in',
+    'Order Notes': ord.notes || '',
+    'Has Payment Proof Screenshot': ord.hasScreenshot ? 'YES' : 'NO',
+  }));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ordersData), 'Selling_Orders');
+
+  // 5. ABC Pareto Classification Sheet
+  const abcData = (analytics.abc?.items || []).map((item, idx) => ({
+    'Rank': idx + 1,
+    'ABC Class': item.abcClass,
+    'SKU': item.sku,
+    'Product Name': item.name,
+    'Category': item.category,
+    'Supplier': item.supplier,
+    'Current Stock': item.currentStock,
+    'Unit Cost (₹)': item.unitCost,
+    'Total Valuation (₹)': item.valuation,
+    'Cumulative Share (%)': `${item.cumulativePercent}%`,
+    'Strategy': item.abcClass === 'A' ? 'Tight Control / Frequent Audit' : item.abcClass === 'B' ? 'Normal Control' : 'Bulk Minimums',
+  }));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(abcData), 'ABC_Pareto');
+
+  // 6. SKU Economics & Profit Margins Sheet
+  const marginData = (analytics.margins || []).map((m, idx) => ({
+    'S.No': idx + 1,
+    'SKU': m.sku,
+    'Product Name': m.name,
+    'Category': m.category,
+    'Unit Cost (₹)': m.unitCost,
+    'Selling Price (₹)': m.sellingPrice,
+    'Unit Margin (₹)': m.unitMargin,
+    'Margin (%)': `${m.marginPercent}%`,
+    [`Units Sold (${days}d)`]: m.unitsSoldInPeriod,
+    [`Period Revenue (${days}d ₹)`]: m.periodRevenue,
+    [`Realized Profit (${days}d ₹)`]: m.realizedProfit,
+  }));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(marginData), 'SKU_Margins');
+
+  // 7. Cash Flow Timeline Sheet
+  const timelineData = (analytics.cashFlowTimeline || []).map((t, idx) => ({
+    'S.No': idx + 1,
+    'Date': t.date,
+    'Sales Inflow (₹)': t.inflow,
+    'Procurement Outflow (₹)': t.outflow,
+    'Net Cash Flow (₹)': t.netFlow,
+    'Sales Orders Count': t.salesCount,
+    'Invoices Count': t.invoiceCount,
+  }));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(timelineData), 'Cash_Flow_Timeline');
+
+  downloadWorkbook(workbook, `Stoqra_Analytics_Dashboard_${days}d`);
+};
+

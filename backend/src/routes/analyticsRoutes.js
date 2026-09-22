@@ -2,9 +2,13 @@ import { Router } from 'express';
 import {
   getStockHealthController,
   getSalesVelocityController,
+  getComprehensiveDashboardController,
 } from '../controllers/analyticsController.js';
 
 const router = Router();
+
+// GET /api/analytics/dashboard - Comprehensive multi-dimensional business analytics
+router.get('/dashboard', getComprehensiveDashboardController);
 
 // GET /api/analytics/stock-health - Valuation, out-of-stock count, and low-stock reorder alerts
 router.get('/stock-health', getStockHealthController);
@@ -13,3 +17,4 @@ router.get('/stock-health', getStockHealthController);
 router.get('/sales-velocity', getSalesVelocityController);
 
 export default router;
+

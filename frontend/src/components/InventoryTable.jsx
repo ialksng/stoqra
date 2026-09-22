@@ -96,6 +96,8 @@ export const InventoryTable = ({
             <tr>
               <th>SKU</th>
               <th>Product Name</th>
+              <th>Category</th>
+              <th>Supplier</th>
               <th>Current Stock</th>
               <th>Reorder Level</th>
               <th>Unit Cost (₹)</th>
@@ -107,13 +109,13 @@ export const InventoryTable = ({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                <td colSpan="10" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
                   Loading catalog inventory...
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                <td colSpan="10" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
                   No inventory items match the current filters.
                 </td>
               </tr>
@@ -135,6 +137,14 @@ export const InventoryTable = ({
                       <strong>{item.sku}</strong>
                     </td>
                     <td>{item.name}</td>
+                    <td>
+                      <span className="badge badge-neutral" style={{ fontSize: '11px' }}>
+                        {item.category || 'General'}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: '12px', color: '#475569' }}>
+                      {item.supplier || 'Direct Supplier'}
+                    </td>
                     <td>
                       <span
                         style={{

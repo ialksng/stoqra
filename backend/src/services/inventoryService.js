@@ -147,6 +147,8 @@ export const processRestock = async (invoiceData, messageId = null) => {
         item.currentStock += quantity;
         item.unitCost = unitCost;
         if (!item.sku && sku) item.sku = sku;
+        if (!item.supplier || item.supplier === 'Direct Supplier') item.supplier = invoiceDoc.vendor;
+        if (lineItem.category && item.category === 'General') item.category = lineItem.category;
         await item.save(sessionOption);
       } else {
         // Upsert new item
@@ -160,6 +162,8 @@ export const processRestock = async (invoiceData, messageId = null) => {
               unitCost,
               sellingPrice: unitCost * 1.5, // sensible default markup
               reorderLevel: 10,
+              category: lineItem.category || 'General',
+              supplier: invoiceDoc.vendor || 'Direct Supplier',
             },
           ],
           sessionOption
@@ -176,6 +180,10 @@ export const processRestock = async (invoiceData, messageId = null) => {
             quantityDelta: quantity,
             unitPrice: unitCost,
             sourceReference: invoiceDoc.invoiceNumber || invoiceDoc._id.toString(),
+            category: item.category || 'General',
+            supplier: item.supplier || invoiceDoc.vendor || null,
+            paymentMode: 'BANK_TRANSFER',
+            paymentAmount: quantity * unitCost,
           },
         ],
         sessionOption
@@ -201,9 +209,24 @@ export const processRestock = async (invoiceData, messageId = null) => {
  * @param {number} params.quantity - Quantity sold
  * @param {number} [params.sellingPrice] - Sale price per unit
  * @param {string} [params.orderId] - Reference order identifier
+ * @param {string} [params.paymentMode] - Payment mode ('UPI', 'CASH', 'CARD', 'BANK_TRANSFER', 'CREDIT', 'OTHER')
+ * @param {number} [params.paymentAmount] - Manual or calculated payment amount
+ * @param {string} [params.paymentScreenshot] - Base64 or URL screenshot of payment proof
+ * @param {string} [params.customerName] - Buyer / Customer identifier
+ * @param {string} [params.notes] - Optional transaction notes
  * @returns {Promise<{ success: boolean, item: Object, transaction: Object }>}
  */
-export const recordSale = async ({ sku, quantity, sellingPrice, orderId }) => {
+export const recordSale = async ({
+  sku,
+  quantity,
+  sellingPrice,
+  orderId,
+  paymentMode = 'CASH',
+  paymentAmount,
+  paymentScreenshot = null,
+  customerName = null,
+  notes = null,
+}) => {
   const normalizedSku = (sku || '').trim().toUpperCase();
   const qty = Number(quantity);
 
@@ -254,6 +277,10 @@ export const recordSale = async ({ sku, quantity, sellingPrice, orderId }) => {
       ? Number(sellingPrice)
       : updatedItem.sellingPrice;
 
+    const totalMoney = paymentAmount !== undefined && paymentAmount !== null && !isNaN(Number(paymentAmount))
+      ? Number(paymentAmount)
+      : qty * finalUnitPrice;
+
     // 3. Append to immutable InventoryTransaction ledger
     const [tx] = await InventoryTransaction.create(
       [
@@ -263,6 +290,13 @@ export const recordSale = async ({ sku, quantity, sellingPrice, orderId }) => {
           quantityDelta: -qty,
           unitPrice: finalUnitPrice,
           sourceReference: orderId || `ORDER-${Date.now()}`,
+          paymentMode: paymentMode || 'CASH',
+          paymentAmount: totalMoney,
+          paymentScreenshot: paymentScreenshot || null,
+          customerName: customerName ? customerName.trim() : null,
+          notes: notes ? notes.trim() : null,
+          category: updatedItem.category || 'General',
+          supplier: updatedItem.supplier || null,
         },
       ],
       sessionOption

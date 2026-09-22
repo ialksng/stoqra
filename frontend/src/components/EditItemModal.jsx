@@ -6,6 +6,8 @@ import { formatINR } from '../utils/formatters.js';
 export const EditItemModal = ({ isOpen, onClose, item, onSuccess }) => {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
+  const [category, setCategory] = useState('General');
+  const [supplier, setSupplier] = useState('');
   const [currentStock, setCurrentStock] = useState(0);
   const [unitCost, setUnitCost] = useState(0);
   const [sellingPrice, setSellingPrice] = useState(0);
@@ -17,6 +19,8 @@ export const EditItemModal = ({ isOpen, onClose, item, onSuccess }) => {
     if (item && isOpen) {
       setName(item.name || '');
       setSku(item.sku || '');
+      setCategory(item.category || 'General');
+      setSupplier(item.supplier || 'Direct Supplier');
       setCurrentStock(item.currentStock ?? 0);
       setUnitCost(item.unitCost ?? 0);
       setSellingPrice(item.sellingPrice ?? 0);
@@ -45,6 +49,8 @@ export const EditItemModal = ({ isOpen, onClose, item, onSuccess }) => {
       await updateItem(item._id, {
         name: name.trim(),
         sku: sku.trim().toUpperCase(),
+        category: category.trim() || 'General',
+        supplier: supplier.trim() || 'Direct Supplier',
         currentStock: Math.max(0, parseInt(currentStock, 10) || 0),
         unitCost: Math.max(0, parseFloat(unitCost) || 0),
         sellingPrice: Math.max(0, parseFloat(sellingPrice) || 0),
@@ -96,6 +102,30 @@ export const EditItemModal = ({ isOpen, onClose, item, onSuccess }) => {
               onChange={(e) => setName(e.target.value)}
               required
             />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="form-group">
+              <label className="form-label">Category</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="e.g. Electronics, Grocery"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Supplier / Vendor</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="e.g. Acme Supplies"
+                value={supplier}
+                onChange={(e) => setSupplier(e.target.value)}
+              />
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>

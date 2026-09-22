@@ -147,13 +147,31 @@ export const fetchSalesVelocity = async (days = 30) => {
   return handleResponse(res);
 };
 
-export const fetchItems = async ({ page = 1, limit = 20, search = '', lowStock = false } = {}) => {
+export const fetchAnalyticsDashboard = async (days = 30) => {
+  const res = await fetch(`${API_PREFIX}/analytics/dashboard?days=${days}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
+export const fetchItems = async ({
+  page = 1,
+  limit = 20,
+  search = '',
+  lowStock = false,
+  category = '',
+  supplier = '',
+} = {}) => {
   const params = new URLSearchParams({
     page: String(page),
     limit: String(limit),
   });
   if (search) params.append('search', search);
   if (lowStock) params.append('lowStock', 'true');
+  if (category) params.append('category', category);
+  if (supplier) params.append('supplier', supplier);
 
   const res = await fetch(`${API_PREFIX}/inventory/items?${params.toString()}`, {
     headers: {
@@ -185,7 +203,17 @@ export const deleteItem = async (id) => {
   return handleResponse(res);
 };
 
-export const recordSale = async ({ sku, quantity, sellingPrice, orderId }) => {
+export const recordSale = async ({
+  sku,
+  quantity,
+  sellingPrice,
+  orderId,
+  paymentMode,
+  paymentAmount,
+  paymentScreenshot,
+  customerName,
+  notes,
+}) => {
   const res = await fetch(`${API_PREFIX}/sales/record`, {
     method: 'POST',
     headers: {
@@ -195,8 +223,13 @@ export const recordSale = async ({ sku, quantity, sellingPrice, orderId }) => {
     body: JSON.stringify({
       sku,
       quantity: Number(quantity),
-      sellingPrice: sellingPrice ? Number(sellingPrice) : undefined,
+      sellingPrice: sellingPrice !== undefined && sellingPrice !== '' ? Number(sellingPrice) : undefined,
       orderId: orderId || undefined,
+      paymentMode: paymentMode || 'CASH',
+      paymentAmount: paymentAmount !== undefined && paymentAmount !== '' ? Number(paymentAmount) : undefined,
+      paymentScreenshot: paymentScreenshot || undefined,
+      customerName: customerName || undefined,
+      notes: notes || undefined,
     }),
   });
   return handleResponse(res);

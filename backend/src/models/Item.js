@@ -37,6 +37,18 @@ const itemSchema = new mongoose.Schema(
       default: 10,
       min: [0, 'Reorder level cannot be negative'],
     },
+    category: {
+      type: String,
+      trim: true,
+      default: 'General',
+      index: true,
+    },
+    supplier: {
+      type: String,
+      trim: true,
+      default: 'Direct Supplier',
+      index: true,
+    },
   },
   {
     timestamps: true,

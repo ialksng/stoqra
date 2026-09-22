@@ -66,13 +66,28 @@ export const uploadInvoice = async (req, res, next) => {
  */
 export const recordSaleController = async (req, res, next) => {
   try {
-    const { sku, quantity, sellingPrice, orderId } = req.body;
+    const {
+      sku,
+      quantity,
+      sellingPrice,
+      orderId,
+      paymentMode,
+      paymentAmount,
+      paymentScreenshot,
+      customerName,
+      notes,
+    } = req.body;
 
     const result = await recordSale({
       sku,
       quantity,
       sellingPrice,
       orderId,
+      paymentMode,
+      paymentAmount,
+      paymentScreenshot,
+      customerName,
+      notes,
     });
 
     return res.status(200).json({
@@ -95,7 +110,7 @@ export const recordSaleController = async (req, res, next) => {
 };
 
 /**
- * List inventory items with pagination, search, and low-stock filtering
+ * List inventory items with pagination, search, category, supplier, and low-stock filtering
  * GET /api/inventory/items
  */
 export const getItems = async (req, res, next) => {
@@ -105,12 +120,22 @@ export const getItems = async (req, res, next) => {
     const skip = (page - 1) * limit;
     const search = (req.query.search || '').trim();
     const lowStock = req.query.lowStock === 'true';
+    const category = (req.query.category || '').trim();
+    const supplier = (req.query.supplier || '').trim();
 
     const filter = {};
 
     if (search) {
       const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      filter.$or = [{ sku: searchRegex }, { name: searchRegex }];
+      filter.$or = [{ sku: searchRegex }, { name: searchRegex }, { category: searchRegex }, { supplier: searchRegex }];
+    }
+
+    if (category) {
+      filter.category = category;
+    }
+
+    if (supplier) {
+      filter.supplier = supplier;
     }
 
     if (lowStock) {
@@ -241,7 +266,7 @@ export const triggerGmailSync = async (req, res, next) => {
 export const updateItem = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, sku, currentStock, unitCost, sellingPrice, reorderLevel } = req.body;
+    const { name, sku, currentStock, unitCost, sellingPrice, reorderLevel, category, supplier } = req.body;
 
     const item = await Item.findById(id);
     if (!item) {
@@ -261,6 +286,8 @@ export const updateItem = async (req, res, next) => {
     }
 
     if (name) item.name = name.trim();
+    if (category) item.category = category.trim();
+    if (supplier) item.supplier = supplier.trim();
     if (unitCost !== undefined) item.unitCost = Math.max(0, Number(unitCost));
     if (sellingPrice !== undefined) item.sellingPrice = Math.max(0, Number(sellingPrice));
     if (reorderLevel !== undefined) item.reorderLevel = Math.max(0, Number(reorderLevel));

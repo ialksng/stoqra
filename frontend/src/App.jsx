@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2, Users } from 'lucide-react';
+import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2, Users, BarChart3 } from 'lucide-react';
 import Navbar from './components/Navbar.jsx';
 import MetricCards from './components/MetricCards.jsx';
 import InventoryTable from './components/InventoryTable.jsx';
@@ -7,6 +7,7 @@ import SalesVelocityView from './components/SalesVelocityView.jsx';
 import InvoicesView from './components/InvoicesView.jsx';
 import TransactionsView from './components/TransactionsView.jsx';
 import TeamView from './components/TeamView.jsx';
+import AnalyticsDashboardView from './components/AnalyticsDashboardView.jsx';
 import UploadInvoiceModal from './components/UploadInvoiceModal.jsx';
 import RecordSaleModal from './components/RecordSaleModal.jsx';
 import EditItemModal from './components/EditItemModal.jsx';
@@ -248,6 +249,13 @@ function Dashboard() {
             Inventory Catalog
           </button>
           <button
+            className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            <BarChart3 size={16} />
+            Analytics Hub
+          </button>
+          <button
             className={`tab ${activeTab === 'velocity' ? 'active' : ''}`}
             onClick={() => setActiveTab('velocity')}
           >
@@ -296,6 +304,10 @@ function Dashboard() {
             onDeleteItem={handleOpenDeleteItem}
             onRefresh={loadItems}
           />
+        )}
+
+        {activeTab === 'analytics' && (
+          <AnalyticsDashboardView />
         )}
 
         {activeTab === 'velocity' && (

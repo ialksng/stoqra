@@ -1,4 +1,8 @@
-import { getStockHealth, getSalesVelocity } from '../services/analyticsService.js';
+import {
+  getStockHealth,
+  getSalesVelocity,
+  getComprehensiveDashboard,
+} from '../services/analyticsService.js';
 
 /**
  * Get inventory stock health summary, valuation, and reorder alerts
@@ -33,7 +37,26 @@ export const getSalesVelocityController = async (req, res, next) => {
   }
 };
 
+/**
+ * Get multi-dimensional business analytics dashboard
+ * GET /api/analytics/dashboard?days=30
+ */
+export const getComprehensiveDashboardController = async (req, res, next) => {
+  try {
+    const days = parseInt(req.query.days, 10) || 30;
+    const data = await getComprehensiveDashboard(days);
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getStockHealthController,
   getSalesVelocityController,
+  getComprehensiveDashboardController,
 };
+

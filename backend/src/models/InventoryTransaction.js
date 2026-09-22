@@ -30,6 +30,40 @@ const inventoryTransactionSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    paymentMode: {
+      type: String,
+      enum: ['UPI', 'CASH', 'CARD', 'BANK_TRANSFER', 'CREDIT', 'OTHER'],
+      default: 'CASH',
+      index: true,
+    },
+    paymentAmount: {
+      type: Number,
+      default: 0,
+    },
+    paymentScreenshot: {
+      type: String, // base64 data URL or image path
+      default: null,
+    },
+    customerName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    notes: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    category: {
+      type: String,
+      trim: true,
+      default: 'General',
+    },
+    supplier: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     createdAt: {
       type: Date,
       default: Date.now,
