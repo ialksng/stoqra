@@ -14,11 +14,29 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete }) => {
       const processed = res.result?.processed ?? 0;
       const skipped = res.result?.skipped ?? 0;
       const reason = res.result?.reason;
+      const details = res.result?.details || [];
 
       let msg = `Gmail sync complete: ${processed} processed, ${skipped} skipped.`;
-      if (reason) msg = `Gmail sync: ${reason}`;
+      if (reason) {
+        msg = `Gmail sync: ${reason}`;
+      } else if (processed === 0 && skipped === 0) {
+        msg = 'Gmail sync: No unread emails with PDF attachments found in INBOX.';
+      } else if (skipped > 0) {
+        const skipSummary = details
+          .filter((d) => d.status === 'skipped')
+          .map((d) => {
+            if (d.reason === 'no_inventory_items') return `"${d.filename || 'PDF'}" has no invoice line items`;
+            if (d.reason === 'already_exists') return 'already processed';
+            if (d.reason === 'no_pdf_attachment') return 'no PDF attachment';
+            return d.reason;
+          })
+          .join(', ');
+        if (skipSummary) {
+          msg += ` (${skipSummary})`;
+        }
+      }
 
-      if (onSyncComplete) onSyncComplete(msg, 'success');
+      if (onSyncComplete) onSyncComplete(msg, processed > 0 ? 'success' : 'info');
     } catch (err) {
       if (onSyncComplete) onSyncComplete(`Gmail sync error: ${err.message}`, 'error');
     } finally {
