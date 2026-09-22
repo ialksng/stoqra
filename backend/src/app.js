@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import inventoryRoutes from './routes/inventoryRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +57,9 @@ app.use('/projects/stoqra/api', inventoryRoutes);
 
 app.use('/api/analytics', analyticsRoutes);
 app.use('/projects/stoqra/api/analytics', analyticsRoutes);
+
+app.use('/api/auth', authRoutes);
+app.use('/projects/stoqra/api/auth', authRoutes);
 
 // Static frontend serving (Production / Build mode)
 // Supports both root and /projects/stoqra base paths

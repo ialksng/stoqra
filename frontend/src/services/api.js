@@ -1,10 +1,30 @@
 /**
  * API Service for communicating with the backend inventory endpoints.
  * Dynamically resolves the API path based on Vite's base URL (e.g., /projects/stoqra/api).
+ * Automatically injects the JWT authentication Bearer token from localStorage.
  */
 
 const BASE_URL = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const API_PREFIX = `${BASE_URL}/api`;
+
+const TOKEN_KEY = 'stoqra_token';
+
+export const getStoredToken = () => {
+  return localStorage.getItem(TOKEN_KEY);
+};
+
+export const setStoredToken = (token) => {
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+};
+
+const getAuthHeaders = () => {
+  const token = getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 const handleResponse = async (response) => {
   const json = await response.json();
@@ -18,13 +38,60 @@ const handleResponse = async (response) => {
   return json;
 };
 
+/* ---------------- AUTHENTICATION APIS ---------------- */
+
+export const getAuthConfig = async () => {
+  const res = await fetch(`${API_PREFIX}/auth/config`);
+  return handleResponse(res);
+};
+
+export const loginWithGoogle = async (credential) => {
+  const res = await fetch(`${API_PREFIX}/auth/google`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ credential }),
+  });
+  return handleResponse(res);
+};
+
+export const demoLogin = async () => {
+  const res = await fetch(`${API_PREFIX}/auth/demo`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  return handleResponse(res);
+};
+
+export const fetchCurrentUser = async () => {
+  const res = await fetch(`${API_PREFIX}/auth/me`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
+/* ---------------- INVENTORY & ANALYTICS APIS ---------------- */
+
 export const fetchStockHealth = async () => {
-  const res = await fetch(`${API_PREFIX}/analytics/stock-health`);
+  const res = await fetch(`${API_PREFIX}/analytics/stock-health`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   return handleResponse(res);
 };
 
 export const fetchSalesVelocity = async (days = 30) => {
-  const res = await fetch(`${API_PREFIX}/analytics/sales-velocity?days=${days}`);
+  const res = await fetch(`${API_PREFIX}/analytics/sales-velocity?days=${days}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   return handleResponse(res);
 };
 
@@ -36,7 +103,11 @@ export const fetchItems = async ({ page = 1, limit = 20, search = '', lowStock =
   if (search) params.append('search', search);
   if (lowStock) params.append('lowStock', 'true');
 
-  const res = await fetch(`${API_PREFIX}/inventory/items?${params.toString()}`);
+  const res = await fetch(`${API_PREFIX}/inventory/items?${params.toString()}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   return handleResponse(res);
 };
 
@@ -45,6 +116,7 @@ export const recordSale = async ({ sku, quantity, sellingPrice, orderId }) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
     },
     body: JSON.stringify({
       sku,
@@ -62,6 +134,9 @@ export const uploadInvoice = async (file) => {
 
   const res = await fetch(`${API_PREFIX}/invoices/upload`, {
     method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+    },
     body: formData,
   });
   return handleResponse(res);
@@ -74,7 +149,11 @@ export const fetchTransactions = async ({ page = 1, limit = 20, type = '' } = {}
   });
   if (type) params.append('type', type);
 
-  const res = await fetch(`${API_PREFIX}/inventory/transactions?${params.toString()}`);
+  const res = await fetch(`${API_PREFIX}/inventory/transactions?${params.toString()}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   return handleResponse(res);
 };
 
@@ -84,18 +163,31 @@ export const fetchInvoices = async ({ page = 1, limit = 20 } = {}) => {
     limit: String(limit),
   });
 
-  const res = await fetch(`${API_PREFIX}/invoices?${params.toString()}`);
+  const res = await fetch(`${API_PREFIX}/invoices?${params.toString()}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   return handleResponse(res);
 };
 
 export const triggerGmailSync = async () => {
   const res = await fetch(`${API_PREFIX}/worker/sync-gmail`, {
     method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+    },
   });
   return handleResponse(res);
 };
 
 export default {
+  getStoredToken,
+  setStoredToken,
+  getAuthConfig,
+  loginWithGoogle,
+  demoLogin,
+  fetchCurrentUser,
   fetchStockHealth,
   fetchSalesVelocity,
   fetchItems,

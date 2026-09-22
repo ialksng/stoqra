@@ -9,6 +9,7 @@ import {
   getInvoices,
   triggerGmailSync,
 } from '../controllers/inventoryController.js';
+import { requireAuth } from '../middlewares/auth.js';
 
 const router = Router();
 
@@ -61,10 +62,10 @@ const recordSaleSchema = z.object({
  */
 
 // 1. Multipart PDF invoice upload & automated stock ingestion
-router.post('/invoices/upload', upload.single('invoice'), uploadInvoice);
+router.post('/invoices/upload', requireAuth, upload.single('invoice'), uploadInvoice);
 
 // 2. Outbound sale recording with atomic $gte stock guard
-router.post('/sales/record', validateBody(recordSaleSchema), recordSaleController);
+router.post('/sales/record', requireAuth, validateBody(recordSaleSchema), recordSaleController);
 
 // 3. Paginated inventory catalog lookup with search & low-stock filter
 router.get('/inventory/items', getItems);
@@ -76,6 +77,6 @@ router.get('/inventory/transactions', getTransactions);
 router.get('/invoices', getInvoices);
 
 // 6. Manual trigger for Gmail background worker polling
-router.post('/worker/sync-gmail', triggerGmailSync);
+router.post('/worker/sync-gmail', requireAuth, triggerGmailSync);
 
 export default router;

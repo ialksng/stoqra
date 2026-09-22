@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Activity, FileText, History, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import Navbar from './components/Navbar.jsx';
 import MetricCards from './components/MetricCards.jsx';
 import InventoryTable from './components/InventoryTable.jsx';
@@ -8,6 +8,8 @@ import InvoicesView from './components/InvoicesView.jsx';
 import TransactionsView from './components/TransactionsView.jsx';
 import UploadInvoiceModal from './components/UploadInvoiceModal.jsx';
 import RecordSaleModal from './components/RecordSaleModal.jsx';
+import LoginView from './components/LoginView.jsx';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import {
   fetchStockHealth,
   fetchSalesVelocity,
@@ -16,7 +18,7 @@ import {
   fetchInvoices,
 } from './services/api.js';
 
-export function App() {
+function Dashboard() {
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'velocity' | 'invoices' | 'ledger'
 
   // Analytics & Health state
@@ -153,7 +155,7 @@ export function App() {
     <div className="app-container">
       {/* Top Navbar */}
       <Navbar
-        onOpenUpload={() => setUploadModalOpen(true)}
+        onOpenUpload={() => setUploadModalOpen(false || true)}
         onOpenSale={handleOpenSaleModal}
         onSyncComplete={(msg, type) => {
           addToast(msg, type);
@@ -278,6 +280,36 @@ export function App() {
         ))}
       </div>
     </div>
+  );
+}
+
+function AppShell() {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="app-loading-screen">
+        <div className="app-loading-card">
+          <Loader2 size={36} className="animate-spin text-primary" />
+          <h2>Stoqra</h2>
+          <p>Verifying secure session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginView />;
+  }
+
+  return <Dashboard />;
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
   );
 }
 

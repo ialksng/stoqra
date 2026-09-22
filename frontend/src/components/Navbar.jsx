@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Package, Mail, UploadCloud, ShoppingCart, Loader2 } from 'lucide-react';
+import { Package, Mail, UploadCloud, ShoppingCart, Loader2, LogOut, User as UserIcon } from 'lucide-react';
 import { triggerGmailSync } from '../services/api.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete }) => {
   const [syncing, setSyncing] = useState(false);
+  const { user, logout } = useAuth();
 
   const handleSyncGmail = async () => {
     setSyncing(true);
@@ -52,6 +54,38 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete }) => {
           <UploadCloud size={16} />
           Upload Invoice PDF
         </button>
+
+        {/* User Profile & Logout */}
+        {user && (
+          <div className="user-profile-menu">
+            <div className="user-chip" title={user.email}>
+              {user.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={user.name || 'User'}
+                  className="user-avatar"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="user-avatar-placeholder">
+                  <UserIcon size={14} />
+                </div>
+              )}
+              <div className="user-info">
+                <span className="user-name">{user.name || user.email}</span>
+                <span className={`user-role-badge ${user.role || 'staff'}`}>{user.role || 'staff'}</span>
+              </div>
+            </div>
+
+            <button
+              className="btn btn-icon btn-logout"
+              onClick={logout}
+              title="Sign out of Stoqra"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

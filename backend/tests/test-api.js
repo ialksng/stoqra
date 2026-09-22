@@ -37,13 +37,32 @@ const runApiTests = async () => {
     }
     console.log('✅ GET /health returned 200 OK\n');
 
+    // 2. Auth config test
+    console.log('Test 2: GET /api/auth/config');
+    const authConfigRes = await fetch(`${baseUrl}/api/auth/config`);
+    const authConfigJson = await authConfigRes.json();
+    if (authConfigRes.status !== 200 || !authConfigJson.success) {
+      throw new Error(`Auth config failed: ${JSON.stringify(authConfigJson)}`);
+    }
+    console.log('✅ GET /api/auth/config returned 200 OK\n');
+
     if (!isDbConnected) {
       console.log('⚠️ Skipping database API tests since MongoDB is not running locally.');
       console.log('🎉 API Health & Route structure verified!\n');
       return;
     }
 
-    // 2. Seed an item for sales testing
+    // 3. Demo login to obtain JWT token for protected routes
+    console.log('Test 3: POST /api/auth/demo');
+    const demoLoginRes = await fetch(`${baseUrl}/api/auth/demo`, { method: 'POST' });
+    const demoLoginJson = await demoLoginRes.json();
+    if (demoLoginRes.status !== 200 || !demoLoginJson.token) {
+      throw new Error(`Demo login failed: ${JSON.stringify(demoLoginJson)}`);
+    }
+    const authToken = demoLoginJson.token;
+    console.log(`✅ Demo login succeeded for user: ${demoLoginJson.user.name}\n`);
+
+    // 4. Seed an item for sales testing
     const testSku = `API-TEST-${Date.now()}`;
     const testItem = await Item.create({
       sku: testSku,
@@ -54,8 +73,8 @@ const runApiTests = async () => {
       reorderLevel: 10,
     });
 
-    // 3. GET /api/inventory/items
-    console.log('Test 2: GET /api/inventory/items');
+    // 5. GET /api/inventory/items
+    console.log('Test 4: GET /api/inventory/items');
     const itemsRes = await fetch(`${baseUrl}/api/inventory/items?search=${testSku}`);
     const itemsJson = await itemsRes.json();
     if (itemsRes.status !== 200 || !itemsJson.success || itemsJson.items.length === 0) {
@@ -63,11 +82,26 @@ const runApiTests = async () => {
     }
     console.log(`✅ GET /api/inventory/items returned item ${itemsJson.items[0].sku}\n`);
 
-    // 4. POST /api/sales/record (Zod validation failure)
-    console.log('Test 3: POST /api/sales/record - Validation failure check');
-    const badSaleRes = await fetch(`${baseUrl}/api/sales/record`, {
+    // 6. POST /api/sales/record (Unauthorized check)
+    console.log('Test 5: POST /api/sales/record - Missing Auth Header Guard (401)');
+    const unauthSaleRes = await fetch(`${baseUrl}/api/sales/record`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sku: testSku, quantity: 1 }),
+    });
+    if (unauthSaleRes.status !== 401) {
+      throw new Error(`Expected 401 Unauthorized without token, got: ${unauthSaleRes.status}`);
+    }
+    console.log('✅ Unauthenticated request correctly rejected with 401.\n');
+
+    // 7. POST /api/sales/record (Zod validation failure with valid auth)
+    console.log('Test 6: POST /api/sales/record - Validation failure check');
+    const badSaleRes = await fetch(`${baseUrl}/api/sales/record`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
       body: JSON.stringify({ sku: testSku, quantity: -5 }), // Negative quantity should fail Zod
     });
     const badSaleJson = await badSaleRes.json();
@@ -76,11 +110,14 @@ const runApiTests = async () => {
     }
     console.log('✅ Zod schema validation correctly caught negative quantity.\n');
 
-    // 5. POST /api/sales/record (Success)
-    console.log('Test 4: POST /api/sales/record - Valid sale');
+    // 8. POST /api/sales/record (Success with valid auth)
+    console.log('Test 7: POST /api/sales/record - Valid authenticated sale');
     const goodSaleRes = await fetch(`${baseUrl}/api/sales/record`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
       body: JSON.stringify({
         sku: testSku,
         quantity: 5,
@@ -112,9 +149,14 @@ const runApiTests = async () => {
     }
     console.log(`✅ Sales velocity report: totalRevenue=$${velocityJson.data.summary.totalRevenue}, items=${velocityJson.data.items.length}\n`);
 
-    // 8. POST /api/worker/sync-gmail (Graceful behavior when credentials are dummy)
-    console.log('Test 7: POST /api/worker/sync-gmail');
-    const syncRes = await fetch(`${baseUrl}/api/worker/sync-gmail`, { method: 'POST' });
+    // 10. POST /api/worker/sync-gmail (Graceful behavior when credentials are dummy)
+    console.log('Test 9: POST /api/worker/sync-gmail');
+    const syncRes = await fetch(`${baseUrl}/api/worker/sync-gmail`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
     const syncJson = await syncRes.json();
     if (syncRes.status !== 200) {
       throw new Error(`POST /api/worker/sync-gmail failed: ${JSON.stringify(syncJson)}`);

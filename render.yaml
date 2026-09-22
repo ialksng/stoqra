@@ -29,3 +29,7 @@ services:
         sync: false
       - key: ADMIN_ALERT_EMAIL
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
