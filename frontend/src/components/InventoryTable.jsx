@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, ShoppingCart, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { Search, Filter, ShoppingCart, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, FileSpreadsheet, Edit3, Trash2 } from 'lucide-react';
 import { formatINR, formatIndianNumber } from '../utils/formatters.js';
 import { exportInventoryToExcel } from '../utils/excelExport.js';
 
@@ -14,6 +14,8 @@ export const InventoryTable = ({
   page,
   setPage,
   onOpenSaleModal,
+  onEditItem,
+  onDeleteItem,
   onRefresh,
 }) => {
   return (
@@ -148,16 +150,36 @@ export const InventoryTable = ({
                     <td>{formatINR(item.sellingPrice)}</td>
                     <td>{statusBadge}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => onOpenSaleModal(item)}
-                        disabled={item.currentStock <= 0}
-                        style={{ opacity: item.currentStock <= 0 ? 0.5 : 1 }}
-                        title={item.currentStock <= 0 ? 'Cannot sell out of stock item' : 'Record sale'}
-                      >
-                        <ShoppingCart size={13} />
-                        Record Sale
-                      </button>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onOpenSaleModal(item)}
+                          disabled={item.currentStock <= 0}
+                          style={{ opacity: item.currentStock <= 0 ? 0.5 : 1 }}
+                          title={item.currentStock <= 0 ? 'Cannot sell out of stock item' : 'Record sale'}
+                        >
+                          <ShoppingCart size={13} />
+                          Sell
+                        </button>
+
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onEditItem(item)}
+                          title="Edit item properties"
+                        >
+                          <Edit3 size={13} />
+                          Edit
+                        </button>
+
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onDeleteItem(item)}
+                          title="Delete item"
+                          style={{ color: '#dc2626' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

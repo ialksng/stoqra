@@ -163,6 +163,28 @@ export const fetchItems = async ({ page = 1, limit = 20, search = '', lowStock =
   return handleResponse(res);
 };
 
+export const updateItem = async (id, itemData) => {
+  const res = await fetch(`${API_PREFIX}/inventory/items/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(itemData),
+  });
+  return handleResponse(res);
+};
+
+export const deleteItem = async (id) => {
+  const res = await fetch(`${API_PREFIX}/inventory/items/${id}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
 export const recordSale = async ({ sku, quantity, sellingPrice, orderId }) => {
   const res = await fetch(`${API_PREFIX}/sales/record`, {
     method: 'POST',
@@ -216,6 +238,26 @@ export const fetchInvoices = async ({ page = 1, limit = 20 } = {}) => {
   });
 
   const res = await fetch(`${API_PREFIX}/invoices?${params.toString()}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
+export const deleteInvoice = async (id) => {
+  const res = await fetch(`${API_PREFIX}/invoices/${id}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
+export const resetDatabase = async () => {
+  const res = await fetch(`${API_PREFIX}/inventory/reset`, {
+    method: 'POST',
     headers: {
       ...getAuthHeaders(),
     },

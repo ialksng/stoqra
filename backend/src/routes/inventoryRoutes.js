@@ -8,6 +8,10 @@ import {
   getTransactions,
   getInvoices,
   triggerGmailSync,
+  updateItem,
+  deleteItem,
+  deleteInvoice,
+  resetDatabase,
 } from '../controllers/inventoryController.js';
 import { requireAuth } from '../middlewares/auth.js';
 
@@ -57,6 +61,15 @@ const recordSaleSchema = z.object({
   orderId: z.string().trim().optional(),
 });
 
+const updateItemSchema = z.object({
+  name: z.string().trim().min(1, 'Name cannot be empty').optional(),
+  sku: z.string().trim().min(1, 'SKU cannot be empty').optional(),
+  currentStock: z.number().int('Stock must be an integer').nonnegative('Stock cannot be negative').optional(),
+  unitCost: z.number().nonnegative('Unit cost cannot be negative').optional(),
+  sellingPrice: z.number().nonnegative('Selling price cannot be negative').optional(),
+  reorderLevel: z.number().int().nonnegative('Reorder level cannot be negative').optional(),
+});
+
 /**
  * Routes definitions
  */
@@ -70,13 +83,25 @@ router.post('/sales/record', requireAuth, validateBody(recordSaleSchema), record
 // 3. Paginated inventory catalog lookup with search & low-stock filter
 router.get('/inventory/items', getItems);
 
-// 4. Ledger history of inventory transactions
+// 4. Update an existing catalog item
+router.put('/inventory/items/:id', requireAuth, validateBody(updateItemSchema), updateItem);
+
+// 5. Delete an item from the catalog
+router.delete('/inventory/items/:id', requireAuth, deleteItem);
+
+// 6. Ledger history of inventory transactions
 router.get('/inventory/transactions', getTransactions);
 
-// 5. Ingested invoice records
+// 7. Ingested invoice records
 router.get('/invoices', getInvoices);
 
-// 6. Manual trigger for Gmail background worker polling
+// 8. Delete an invoice record
+router.delete('/invoices/:id', requireAuth, deleteInvoice);
+
+// 9. Reset database records for testing
+router.post('/inventory/reset', requireAuth, resetDatabase);
+
+// 10. Manual trigger for Gmail background worker polling
 router.post('/worker/sync-gmail', requireAuth, triggerGmailSync);
 
 export default router;

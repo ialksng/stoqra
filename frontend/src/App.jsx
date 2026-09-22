@@ -9,6 +9,8 @@ import TransactionsView from './components/TransactionsView.jsx';
 import TeamView from './components/TeamView.jsx';
 import UploadInvoiceModal from './components/UploadInvoiceModal.jsx';
 import RecordSaleModal from './components/RecordSaleModal.jsx';
+import EditItemModal from './components/EditItemModal.jsx';
+import DeleteConfirmModal from './components/DeleteConfirmModal.jsx';
 import LoginView from './components/LoginView.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import {
@@ -17,6 +19,9 @@ import {
   fetchItems,
   fetchTransactions,
   fetchInvoices,
+  deleteItem,
+  deleteInvoice,
+  resetDatabase,
 } from './services/api.js';
 import { exportCompleteReportToExcel } from './utils/excelExport.js';
 
@@ -48,6 +53,48 @@ function Dashboard() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [selectedSaleItem, setSelectedSaleItem] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfig, setDeleteConfig] = useState({
+    title: '',
+    message: '',
+    itemLabel: '',
+    onConfirm: () => {},
+  });
+
+  const handleOpenEditItem = (item) => {
+    setItemToEdit(item);
+    setEditModalOpen(true);
+  };
+
+  const handleOpenDeleteItem = (item) => {
+    setDeleteConfig({
+      title: 'Delete Inventory Item',
+      message: 'Are you sure you want to permanently delete this product from the inventory catalog?',
+      itemLabel: `${item.name} [SKU: ${item.sku}]`,
+      onConfirm: async () => {
+        await deleteItem(item._id);
+        addToast(`Item "${item.name}" deleted successfully.`, 'success');
+        refreshAllData();
+      },
+    });
+    setDeleteModalOpen(true);
+  };
+
+  const handleOpenDeleteInvoice = (inv) => {
+    setDeleteConfig({
+      title: 'Delete Ingested Invoice',
+      message: 'Are you sure you want to delete this invoice record from the register?',
+      itemLabel: `Invoice #${inv.invoiceNumber} — ${inv.vendor}`,
+      onConfirm: async () => {
+        await deleteInvoice(inv._id);
+        addToast(`Invoice #${inv.invoiceNumber} deleted.`, 'success');
+        refreshAllData();
+      },
+    });
+    setDeleteModalOpen(true);
+  };
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
@@ -245,6 +292,8 @@ function Dashboard() {
             page={page}
             setPage={setPage}
             onOpenSaleModal={handleOpenSaleModal}
+            onEditItem={handleOpenEditItem}
+            onDeleteItem={handleOpenDeleteItem}
             onRefresh={loadItems}
           />
         )}
@@ -260,7 +309,11 @@ function Dashboard() {
         )}
 
         {activeTab === 'invoices' && (
-          <InvoicesView invoices={invoices} loading={loadingInvoices} />
+          <InvoicesView
+            invoices={invoices}
+            loading={loadingInvoices}
+            onDeleteInvoice={handleOpenDeleteInvoice}
+          />
         )}
 
         {activeTab === 'ledger' && (
@@ -298,6 +351,28 @@ function Dashboard() {
           addToast(msg, 'success');
           refreshAllData();
         }}
+      />
+
+      <EditItemModal
+        isOpen={editModalOpen}
+        item={itemToEdit}
+        onClose={() => {
+          setEditModalOpen(false);
+          setItemToEdit(null);
+        }}
+        onSuccess={(msg) => {
+          addToast(msg, 'success');
+          refreshAllData();
+        }}
+      />
+
+      <DeleteConfirmModal
+        isOpen={deleteModalOpen}
+        title={deleteConfig.title}
+        message={deleteConfig.message}
+        itemLabel={deleteConfig.itemLabel}
+        onConfirm={deleteConfig.onConfirm}
+        onClose={() => setDeleteModalOpen(false)}
       />
 
       {/* Toast Notification Container */}

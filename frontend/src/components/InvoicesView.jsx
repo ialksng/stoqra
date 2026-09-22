@@ -1,9 +1,9 @@
 import React from 'react';
-import { FileText, CheckCircle2, XCircle, FileSpreadsheet } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { formatINR, formatIndianDate } from '../utils/formatters.js';
 import { exportInvoicesToExcel } from '../utils/excelExport.js';
 
-export const InvoicesView = ({ invoices, loading }) => {
+export const InvoicesView = ({ invoices, loading, onDeleteInvoice }) => {
   return (
     <div className="table-card">
       <div className="table-header-bar">
@@ -34,18 +34,19 @@ export const InvoicesView = ({ invoices, loading }) => {
               <th>Items Restocked</th>
               <th>Processed Date</th>
               <th>Source Ref</th>
+              <th style={{ textAlign: 'right' }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
                   Loading invoice history...
                 </td>
               </tr>
             ) : invoices.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
                   No invoices ingested yet. Upload an Indian GST invoice PDF or run Gmail sync.
                 </td>
               </tr>
@@ -78,6 +79,16 @@ export const InvoicesView = ({ invoices, loading }) => {
                   </td>
                   <td style={{ fontSize: '12px', fontFamily: 'monospace', color: '#64748b' }}>
                     {inv.messageId ? `Gmail: ${inv.messageId}` : 'Manual Upload'}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onDeleteInvoice(inv)}
+                      title="Delete invoice record"
+                      style={{ color: '#dc2626' }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </td>
                 </tr>
               ))

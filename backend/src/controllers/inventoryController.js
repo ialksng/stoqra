@@ -1,6 +1,7 @@
 import Item from '../models/Item.js';
 import InventoryTransaction from '../models/InventoryTransaction.js';
 import Invoice from '../models/Invoice.js';
+import ProcessedMail from '../models/ProcessedMail.js';
 import { parseInvoicePDF } from '../services/invoiceParser.js';
 import { processRestock, recordSale, InventoryError } from '../services/inventoryService.js';
 import { syncGmailInvoices } from '../workers/gmailWatcher.js';
@@ -233,6 +234,134 @@ export const triggerGmailSync = async (req, res, next) => {
   }
 };
 
+/**
+ * Update an existing inventory item
+ * PUT /api/inventory/items/:id
+ */
+export const updateItem = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, sku, currentStock, unitCost, sellingPrice, reorderLevel } = req.body;
+
+    const item = await Item.findById(id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Item not found' });
+    }
+
+    // Check SKU collision if modified
+    if (sku && sku.toUpperCase() !== item.sku) {
+      const existingSku = await Item.findOne({ sku: sku.toUpperCase(), _id: { $ne: id } });
+      if (existingSku) {
+        return res.status(400).json({
+          success: false,
+          error: `SKU '${sku.toUpperCase()}' is already in use by another item.`,
+        });
+      }
+      item.sku = sku.toUpperCase();
+    }
+
+    if (name) item.name = name.trim();
+    if (unitCost !== undefined) item.unitCost = Math.max(0, Number(unitCost));
+    if (sellingPrice !== undefined) item.sellingPrice = Math.max(0, Number(sellingPrice));
+    if (reorderLevel !== undefined) item.reorderLevel = Math.max(0, Number(reorderLevel));
+
+    // If stock changed manually, log an ADJUSTMENT transaction in the ledger
+    if (currentStock !== undefined && Number(currentStock) !== item.currentStock) {
+      const delta = Number(currentStock) - item.currentStock;
+      item.currentStock = Math.max(0, Number(currentStock));
+
+      await InventoryTransaction.create({
+        itemId: item._id,
+        type: 'ADJUSTMENT',
+        quantityDelta: delta,
+        unitPrice: item.unitCost,
+        sourceReference: `Manual Adjustment by ${req.user?.name || req.user?.email || 'Admin'}`,
+      });
+    }
+
+    await item.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Item '${item.name}' updated successfully.`,
+      item,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete an inventory item by ID
+ * DELETE /api/inventory/items/:id
+ */
+export const deleteItem = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const item = await Item.findByIdAndDelete(id);
+
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Item not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Item '${item.name}' (${item.sku}) deleted successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Delete an invoice record by ID
+ * DELETE /api/invoices/:id
+ */
+export const deleteInvoice = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const invoice = await Invoice.findByIdAndDelete(id);
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, error: 'Invoice not found' });
+    }
+
+    // Remove from ProcessedMail cache if it was synced from Gmail
+    if (invoice.messageId) {
+      await ProcessedMail.deleteOne({ messageId: invoice.messageId });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Invoice #${invoice.invoiceNumber} deleted successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Reset all records (Catalog, Invoices, Transactions, Mail Cache) for testing
+ * POST /api/inventory/reset
+ */
+export const resetDatabase = async (req, res, next) => {
+  try {
+    await Promise.all([
+      Item.deleteMany({}),
+      Invoice.deleteMany({}),
+      InventoryTransaction.deleteMany({}),
+      ProcessedMail.deleteMany({}),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'All inventory items, invoices, and transaction ledger records have been reset.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   uploadInvoice,
   recordSaleController,
@@ -240,4 +369,8 @@ export default {
   getTransactions,
   getInvoices,
   triggerGmailSync,
+  updateItem,
+  deleteItem,
+  deleteInvoice,
+  resetDatabase,
 };

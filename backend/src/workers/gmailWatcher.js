@@ -260,7 +260,13 @@ export const syncGmailInvoices = async () => {
   } catch (error) {
     console.error('[GmailWatcher] Global sync cycle failure:', error.message);
     results.status = 'error';
-    results.error = error.message;
+    if (error.message.includes('unauthorized_client')) {
+      results.error = 'OAuth Client Mismatch (unauthorized_client): GMAIL_REFRESH_TOKEN was created for a different Client ID than GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET. Re-generate your refresh token using your exact Client ID & Secret in OAuth Playground.';
+    } else if (error.message.includes('invalid_grant')) {
+      results.error = 'Token Expired/Revoked (invalid_grant): Please generate a fresh refresh token in Google OAuth Playground.';
+    } else {
+      results.error = error.message;
+    }
   } finally {
     isSyncInProgress = false;
   }
