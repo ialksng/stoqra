@@ -1,0 +1,43 @@
+{
+  "name": "inventory-system",
+  "version": "1.0.0",
+  "description": "Automated Inventory Management System with Gemini Document Intelligence, Gmail Ingestion, and MongoDB Ledger",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node tests/test-flow.js && node tests/test-api.js",
+    "test:flow": "node tests/test-flow.js",
+    "test:api": "node tests/test-api.js"
+  },
+  "keywords": [
+    "inventory",
+    "express",
+    "mongodb",
+    "mongoose",
+    "gemini",
+    "genai",
+    "gmail",
+    "transactions",
+    "ledger"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^2.24.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0",
+    "helmet": "^8.0.0",
+    "mongoose": "^8.9.5",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.10.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

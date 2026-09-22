@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: stoqra-inventory-system
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GMAIL_CLIENT_ID
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN
+        sync: false
+      - key: ALERT_SENDER_EMAIL
+        sync: false
+      - key: ALERT_APP_PASSWORD
+        sync: false
+      - key: ADMIN_ALERT_EMAIL
+        sync: false

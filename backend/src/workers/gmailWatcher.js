@@ -1,0 +1,227 @@
+import cron from 'node-cron';
+import { getGmailClient } from '../config/googleAuth.js';
+import Invoice from '../models/Invoice.js';
+import { parseInvoicePDF } from '../services/invoiceParser.js';
+import { processRestock } from '../services/inventoryService.js';
+
+let cronTask = null;
+let isSyncInProgress = false;
+
+/**
+ * Recursively find all PDF attachment parts in a Gmail message payload
+ * @param {Object} payload - Gmail message payload
+ * @returns {Array} List of PDF parts
+ */
+const findPdfParts = (payload) => {
+  const pdfParts = [];
+
+  const traverse = (part) => {
+    if (!part) return;
+
+    const isPdfFilename = part.filename && part.filename.toLowerCase().endsWith('.pdf');
+    const isPdfMime = part.mimeType === 'application/pdf';
+
+    if ((isPdfFilename || isPdfMime) && part.body && part.body.attachmentId) {
+      pdfParts.push(part);
+    }
+
+    if (part.parts && Array.isArray(part.parts)) {
+      for (const subPart of part.parts) {
+        traverse(subPart);
+      }
+    }
+  };
+
+  traverse(payload);
+  return pdfParts;
+};
+
+/**
+ * Execute Gmail invoice ingestion sync
+ * @returns {Promise<{ processed: number, skipped: number, errors: number, details: Array }>}
+ */
+export const syncGmailInvoices = async () => {
+  if (isSyncInProgress) {
+    console.log('[GmailWatcher] Sync already in progress, skipping concurrent trigger.');
+    return { status: 'in_progress', message: 'Sync already in progress' };
+  }
+
+  isSyncInProgress = true;
+  console.log('[GmailWatcher] Starting Gmail invoice polling cycle...');
+
+  const results = {
+    processed: 0,
+    skipped: 0,
+    errors: 0,
+    details: [],
+  };
+
+  let gmail;
+  try {
+    gmail = getGmailClient();
+  } catch (error) {
+    console.warn(`[GmailWatcher] Skipping poll: ${error.message}`);
+    isSyncInProgress = false;
+    return { status: 'skipped', reason: error.message };
+  }
+
+  try {
+    // Search query for unread PDF invoices in INBOX
+    const query = 'has:attachment filename:pdf label:INBOX is:unread "invoice"';
+    const listRes = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: 20,
+    });
+
+    const messages = listRes.data.messages || [];
+    console.log(`[GmailWatcher] Found ${messages.length} matching unread message(s) in Gmail.`);
+
+    for (const msgRef of messages) {
+      const messageId = msgRef.id;
+
+      // 1. Verify if messageId already exists in MongoDB
+      const alreadyProcessed = await Invoice.findOne({ messageId });
+      if (alreadyProcessed) {
+        console.log(`[GmailWatcher] Message ${messageId} already exists in database. Skipping.`);
+        results.skipped += 1;
+        results.details.push({ messageId, status: 'skipped', reason: 'already_exists' });
+        continue;
+      }
+
+      try {
+        // 2. Fetch full message payload
+        const msgRes = await gmail.users.messages.get({
+          userId: 'me',
+          id: messageId,
+        });
+
+        const pdfParts = findPdfParts(msgRes.data.payload);
+
+        if (pdfParts.length === 0) {
+          console.log(`[GmailWatcher] Message ${messageId} did not contain downloadable PDF attachments.`);
+          results.skipped += 1;
+          results.details.push({ messageId, status: 'skipped', reason: 'no_pdf_attachment' });
+          continue;
+        }
+
+        console.log(`[GmailWatcher] Processing ${pdfParts.length} PDF(s) in message ${messageId}...`);
+
+        for (const part of pdfParts) {
+          // 3. Download PDF attachment into memory buffer
+          const attachmentRes = await gmail.users.messages.attachments.get({
+            userId: 'me',
+            messageId,
+            id: part.body.attachmentId,
+          });
+
+          const base64Data = attachmentRes.data.data;
+          const pdfBuffer = Buffer.from(base64Data, 'base64url');
+
+          // 4. Pass buffer to Gemini PDF extraction service
+          console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${part.filename}"...`);
+          const extractedInvoice = await parseInvoicePDF(pdfBuffer);
+
+          // 5. Ingest into stock database atomically
+          console.log(`[GmailWatcher] Ingesting parsed invoice "${extractedInvoice.invoiceNumber}" into stock ledger...`);
+          const restockResult = await processRestock(extractedInvoice, messageId);
+
+          results.processed += 1;
+          results.details.push({
+            messageId,
+            filename: part.filename,
+            invoiceNumber: extractedInvoice.invoiceNumber,
+            itemsCount: extractedInvoice.items.length,
+            status: 'success',
+            restockResult,
+          });
+        }
+
+        // 6. Remove UNREAD label from message upon successful ingestion
+        await gmail.users.messages.modify({
+          userId: 'me',
+          id: messageId,
+          requestBody: {
+            removeLabelIds: ['UNREAD'],
+          },
+        });
+        console.log(`[GmailWatcher] Removed UNREAD label from message ${messageId}`);
+      } catch (msgError) {
+        console.error(`[GmailWatcher] Error processing message ${messageId}:`, msgError.message);
+        results.errors += 1;
+        results.details.push({
+          messageId,
+          status: 'error',
+          error: msgError.message,
+        });
+
+        // Record failed invoice entry to prevent repeated poison pill processing
+        try {
+          await Invoice.findOneAndUpdate(
+            { messageId },
+            {
+              messageId,
+              invoiceNumber: `FAILED-${messageId}`,
+              vendor: 'Error during ingestion',
+              status: 'FAILED',
+              errorMessage: msgError.message,
+            },
+            { upsert: true }
+          );
+        } catch (dbErr) {
+          console.error(`[GmailWatcher] Failed to record error state for ${messageId}:`, dbErr.message);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[GmailWatcher] Global sync cycle failure:', error.message);
+    results.status = 'error';
+    results.error = error.message;
+  } finally {
+    isSyncInProgress = false;
+  }
+
+  console.log(
+    `[GmailWatcher] Cycle finished. Processed: ${results.processed}, Skipped: ${results.skipped}, Errors: ${results.errors}`
+  );
+  return results;
+};
+
+/**
+ * Start scheduled cron job (Runs every 15 minutes: * /15 * * * *)
+ */
+export const startGmailWatcher = () => {
+  const cronExpression = '*/15 * * * *';
+
+  if (cronTask) {
+    cronTask.stop();
+  }
+
+  console.log(`[GmailWatcher] Initializing cron worker scheduled at: "${cronExpression}"`);
+  cronTask = cron.schedule(cronExpression, async () => {
+    try {
+      await syncGmailInvoices();
+    } catch (err) {
+      console.error('[GmailWatcher] Cron tick unhandled error:', err.message);
+    }
+  });
+
+  return cronTask;
+};
+
+/**
+ * Stop the cron worker
+ */
+export const stopGmailWatcher = () => {
+  if (cronTask) {
+    cronTask.stop();
+    cronTask = null;
+    console.log('[GmailWatcher] Cron worker stopped.');
+  }
+};
+
+export default {
+  startGmailWatcher,
+  stopGmailWatcher,
+  syncGmailInvoices,
+};

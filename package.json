@@ -1,0 +1,22 @@
+{
+  "name": "stoqra-inventory-system",
+  "version": "1.0.0",
+  "description": "Production-Ready Automated Inventory Management System with React Frontend, Gemini Document Intelligence, Gmail Ingestion, and MongoDB Ledger",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix backend install && npm --prefix frontend install && npm --prefix frontend run build",
+    "start": "node backend/src/server.js",
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan.bold,magenta.bold\" \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "test": "npm --prefix backend test",
+    "test:flow": "npm --prefix backend run test:flow",
+    "test:api": "npm --prefix backend run test:api",
+    "test:serving": "node backend/tests/test-production-serving.js",
+    "install:all": "npm --prefix backend install && npm --prefix frontend install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
