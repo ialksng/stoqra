@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { UploadCloud, X, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { UploadCloud, CheckCircle2, AlertCircle, Loader2, File, X } from 'lucide-react';
 import { uploadInvoice } from '../services/api.js';
+import { formatINR } from '../utils/formatters.js';
 
 export const UploadInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
   const [file, setFile] = useState(null);
@@ -90,7 +91,7 @@ export const UploadInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
               <div style={{ marginTop: '10px', fontSize: '13px', color: '#047857' }}>
                 <div><strong>Invoice #:</strong> {result.invoice.invoiceNumber}</div>
                 <div><strong>Vendor:</strong> {result.invoice.vendor}</div>
-                <div><strong>Total Amount:</strong> ${Number(result.invoice.totalAmount || 0).toFixed(2)}</div>
+                <div><strong>Total Amount:</strong> {formatINR(result.invoice.totalAmount)}</div>
                 <div><strong>Line Items:</strong> {result.invoice.items?.length || 0} product(s)</div>
               </div>
             </div>
@@ -118,7 +119,7 @@ export const UploadInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
                 {file ? file.name : 'Click to select invoice PDF file'}
               </div>
               <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
-                {file ? `${(file.size / 1024).toFixed(1)} KB` : 'Supports standard PDF invoices up to 15MB'}
+                {file ? `${(file.size / 1024).toFixed(1)} KB` : 'Supports standard & Indian GST Tax Invoices up to 15MB'}
               </div>
               <input
                 id="pdf-file-input"
@@ -130,7 +131,7 @@ export const UploadInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '18px', lineHeight: 1.4 }}>
-              💡 <strong>Gemini 2.5 Flash</strong> document intelligence will automatically extract invoice numbers, vendor details, product line items, quantities, and unit costs.
+              💡 <strong>Gemini 2.5 Flash</strong> document intelligence will automatically parse vendor details, GSTIN/tax info, item SKUs, quantities, and costs in Indian Rupees (₹).
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

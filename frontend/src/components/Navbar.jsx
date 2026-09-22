@@ -31,7 +31,7 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete }) => {
       <div className="brand">
         <Package size={26} />
         <span>Stoqra</span>
-        <span className="brand-badge">Auto Inventory</span>
+        <span className="brand-badge">GST Auto Inventory</span>
       </div>
 
       <div className="nav-actions">

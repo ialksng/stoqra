@@ -62,13 +62,13 @@ export const parseInvoicePDF = async (pdfBuffer) => {
   try {
     const base64Data = pdfBuffer.toString('base64');
 
-    const prompt = `You are an automated invoice parsing engine.
+    const prompt = `You are an automated invoice parsing engine specialized in commercial and Indian GST Tax Invoices.
 Extract all structured data from this PDF invoice with high accuracy:
-- invoiceNumber (e.g. INV-10023)
-- vendorName (the company issuing the invoice)
-- totalAmount (the final total charged)
-- items: extract every single line item with its SKU (or model/part code), clear item name, integer or decimal quantity, and unit cost.
-Ensure all numbers are positive numerical values.`;
+- invoiceNumber: Unique invoice or bill number (e.g. INV-10023, GST/24-25/001)
+- vendorName: Name of the supplier or business entity issuing the invoice
+- totalAmount: Final total payable invoice amount in Rupees/INR (including applicable CGST, SGST, IGST)
+- items: Extract every line item with its SKU (or HSN/SAC code / product code), clear item description, quantity delivered, and unit cost.
+Ensure all amounts and quantities are positive numerical values without currency symbols.`;
 
     const response = await ai.models.generateContent({
       model: DEFAULT_GEMINI_MODEL,

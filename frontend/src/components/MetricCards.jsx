@@ -1,5 +1,6 @@
 import React from 'react';
-import { DollarSign, Package, AlertTriangle, AlertCircle, CheckCircle, TrendingDown } from 'lucide-react';
+import { IndianRupee, Package, AlertTriangle, AlertCircle, TrendingDown } from 'lucide-react';
+import { formatINR, formatIndianNumber } from '../utils/formatters.js';
 
 export const MetricCards = ({ healthData, onFilterLowStock }) => {
   const metrics = healthData?.metrics || {
@@ -13,26 +14,18 @@ export const MetricCards = ({ healthData, onFilterLowStock }) => {
 
   const criticalItems = healthData?.criticalItems || [];
 
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 2,
-    }).format(val || 0);
-  };
-
   return (
     <div>
       <div className="cards-grid">
         {/* Valuation Card */}
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">Total Valuation</span>
-            <DollarSign size={20} color="#2563eb" />
+            <span className="metric-title">Total Valuation (INR)</span>
+            <IndianRupee size={20} color="#2563eb" />
           </div>
-          <div className="metric-value">{formatCurrency(metrics.totalValuation)}</div>
+          <div className="metric-value">{formatINR(metrics.totalValuation)}</div>
           <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
-            Across {metrics.totalStockUnits} total inventory units
+            Across {formatIndianNumber(metrics.totalStockUnits)} total inventory units
           </div>
         </div>
 
@@ -42,7 +35,7 @@ export const MetricCards = ({ healthData, onFilterLowStock }) => {
             <span className="metric-title">Active SKUs</span>
             <Package size={20} color="#2563eb" />
           </div>
-          <div className="metric-value">{metrics.totalSkus}</div>
+          <div className="metric-value">{formatIndianNumber(metrics.totalSkus)}</div>
           <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
             Catalog products tracked
           </div>
@@ -60,7 +53,7 @@ export const MetricCards = ({ healthData, onFilterLowStock }) => {
             <AlertTriangle size={20} color="#f59e0b" />
           </div>
           <div className="metric-value" style={{ color: '#d97706' }}>
-            {metrics.lowStockCount}
+            {formatIndianNumber(metrics.lowStockCount)}
           </div>
           <div style={{ fontSize: '13px', color: '#b45309', marginTop: '6px' }}>
             At or below reorder threshold
@@ -74,7 +67,7 @@ export const MetricCards = ({ healthData, onFilterLowStock }) => {
             <AlertCircle size={20} color="#ef4444" />
           </div>
           <div className="metric-value" style={{ color: '#dc2626' }}>
-            {metrics.outOfStockCount}
+            {formatIndianNumber(metrics.outOfStockCount)}
           </div>
           <div style={{ fontSize: '13px', color: '#b91c1c', marginTop: '6px' }}>
             Immediate stock replenishment needed

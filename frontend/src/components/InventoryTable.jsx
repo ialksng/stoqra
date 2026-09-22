@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, Filter, ShoppingCart, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, Filter, ShoppingCart, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle } from 'lucide-react';
+import { formatINR, formatIndianNumber } from '../utils/formatters.js';
 
 export const InventoryTable = ({
   items,
@@ -84,8 +85,8 @@ export const InventoryTable = ({
               <th>Product Name</th>
               <th>Current Stock</th>
               <th>Reorder Level</th>
-              <th>Unit Cost</th>
-              <th>Selling Price</th>
+              <th>Unit Cost (₹)</th>
+              <th>Selling Price (₹)</th>
               <th>Status</th>
               <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
@@ -112,7 +113,7 @@ export const InventoryTable = ({
                 if (isOutOfStock) {
                   statusBadge = <span className="badge badge-danger">Out of Stock</span>;
                 } else if (isLowStock) {
-                  statusBadge = <span className="badge badge-warning">Low Stock ({item.currentStock}/{item.reorderLevel})</span>;
+                  statusBadge = <span className="badge badge-warning">Low Stock ({formatIndianNumber(item.currentStock)}/{formatIndianNumber(item.reorderLevel)})</span>;
                 }
 
                 return (
@@ -128,12 +129,12 @@ export const InventoryTable = ({
                           color: isOutOfStock ? '#dc2626' : isLowStock ? '#d97706' : '#1e293b',
                         }}
                       >
-                        {item.currentStock}
+                        {formatIndianNumber(item.currentStock)}
                       </span>
                     </td>
-                    <td>{item.reorderLevel}</td>
-                    <td>${Number(item.unitCost || 0).toFixed(2)}</td>
-                    <td>${Number(item.sellingPrice || 0).toFixed(2)}</td>
+                    <td>{formatIndianNumber(item.reorderLevel)}</td>
+                    <td>{formatINR(item.unitCost)}</td>
+                    <td>{formatINR(item.sellingPrice)}</td>
                     <td>{statusBadge}</td>
                     <td style={{ textAlign: 'right' }}>
                       <button

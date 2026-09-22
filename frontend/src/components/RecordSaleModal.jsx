@@ -126,7 +126,7 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Selling Price ($/unit)</label>
+              <label className="form-label">Selling Price (₹/unit)</label>
               <input
                 type="number"
                 step="0.01"

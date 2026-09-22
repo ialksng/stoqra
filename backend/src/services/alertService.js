@@ -89,7 +89,7 @@ export const dispatchLowStockAlert = async (item) => {
             </tr>
             <tr>
               <th>Current Unit Cost</th>
-              <td>$${Number(item.unitCost || 0).toFixed(2)}</td>
+              <td>₹${Number(item.unitCost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
             </tr>
             <tr>
               <th>Suggested Restock Qty</th>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { History, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { formatINR, formatIndianDate, formatIndianNumber } from '../utils/formatters.js';
 
 export const TransactionsView = ({ transactions, loading, typeFilter, setTypeFilter }) => {
   return (
@@ -30,12 +31,12 @@ export const TransactionsView = ({ transactions, loading, typeFilter, setTypeFil
         <table className="data-table">
           <thead>
             <tr>
-              <th>Timestamp</th>
+              <th>Timestamp (IST)</th>
               <th>Item SKU</th>
               <th>Product Name</th>
               <th>Type</th>
               <th>Quantity Delta</th>
-              <th>Unit Price</th>
+              <th>Unit Price (₹)</th>
               <th>Reference</th>
             </tr>
           </thead>
@@ -58,7 +59,7 @@ export const TransactionsView = ({ transactions, loading, typeFilter, setTypeFil
                 return (
                   <tr key={tx._id}>
                     <td style={{ fontSize: '13px', color: '#64748b' }}>
-                      {new Date(tx.createdAt).toLocaleString()}
+                      {formatIndianDate(tx.createdAt)}
                     </td>
                     <td>
                       <strong>{tx.itemId?.sku || 'UNKNOWN'}</strong>
@@ -76,10 +77,10 @@ export const TransactionsView = ({ transactions, loading, typeFilter, setTypeFil
                     </td>
                     <td>
                       <strong style={{ color: isInbound ? '#059669' : '#dc2626', fontSize: '15px' }}>
-                        {isInbound ? `+${tx.quantityDelta}` : tx.quantityDelta}
+                        {isInbound ? `+${formatIndianNumber(tx.quantityDelta)}` : formatIndianNumber(tx.quantityDelta)}
                       </strong>
                     </td>
-                    <td>${Number(tx.unitPrice || 0).toFixed(2)}</td>
+                    <td>{formatINR(tx.unitPrice)}</td>
                     <td style={{ fontSize: '13px', color: '#64748b', fontFamily: 'monospace' }}>
                       {tx.sourceReference || 'N/A'}
                     </td>

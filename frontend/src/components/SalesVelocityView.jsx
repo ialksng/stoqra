@@ -1,7 +1,8 @@
 import React from 'react';
-import { Activity, Flame, Calendar, DollarSign } from 'lucide-react';
+import { Activity, Flame, IndianRupee } from 'lucide-react';
+import { formatINR, formatIndianNumber, formatIndianDate } from '../utils/formatters.js';
 
-export const SalesVelocityView = ({ velocityData, days, setDays, loading, onRefresh }) => {
+export const SalesVelocityView = ({ velocityData, days, setDays, loading }) => {
   const summary = velocityData?.summary || {
     totalUnitsSold: 0,
     totalRevenue: 0,
@@ -11,26 +12,18 @@ export const SalesVelocityView = ({ velocityData, days, setDays, loading, onRefr
 
   const items = velocityData?.items || [];
 
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 2,
-    }).format(val || 0);
-  };
-
   return (
     <div>
       {/* Velocity Summary Grid */}
       <div className="cards-grid" style={{ marginBottom: '20px' }}>
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">Period Revenue</span>
-            <DollarSign size={20} color="#10b981" />
+            <span className="metric-title">Period Revenue (INR)</span>
+            <IndianRupee size={20} color="#10b981" />
           </div>
-          <div className="metric-value">{formatCurrency(summary.totalRevenue)}</div>
+          <div className="metric-value">{formatINR(summary.totalRevenue)}</div>
           <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
-            Generated across {summary.activeSkusWithSales} active product SKUs
+            Generated across {formatIndianNumber(summary.activeSkusWithSales)} active product SKUs
           </div>
         </div>
 
@@ -39,7 +32,7 @@ export const SalesVelocityView = ({ velocityData, days, setDays, loading, onRefr
             <span className="metric-title">Total Units Sold</span>
             <Activity size={20} color="#2563eb" />
           </div>
-          <div className="metric-value">{summary.totalUnitsSold}</div>
+          <div className="metric-value">{formatIndianNumber(summary.totalUnitsSold)}</div>
           <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
             Units depleted over {days} days
           </div>
@@ -88,7 +81,7 @@ export const SalesVelocityView = ({ velocityData, days, setDays, loading, onRefr
                 <th>Product Name</th>
                 <th>Current Stock</th>
                 <th>Units Sold</th>
-                <th>Period Revenue</th>
+                <th>Period Revenue (₹)</th>
                 <th>Daily Burn Rate</th>
                 <th>Days Remaining</th>
                 <th>Estimated Run-out</th>
@@ -118,11 +111,11 @@ export const SalesVelocityView = ({ velocityData, days, setDays, loading, onRefr
                         <strong>{item.sku}</strong>
                       </td>
                       <td>{item.name}</td>
-                      <td>{item.currentStock} units</td>
+                      <td>{formatIndianNumber(item.currentStock)} units</td>
                       <td>
-                        <strong>{item.totalUnitsSold}</strong>
+                        <strong>{formatIndianNumber(item.totalUnitsSold)}</strong>
                       </td>
-                      <td>{formatCurrency(item.totalRevenue)}</td>
+                      <td>{formatINR(item.totalRevenue)}</td>
                       <td>
                         <span style={{ color: '#d97706', fontWeight: 600 }}>
                           {item.dailyBurnRate} /day
@@ -147,7 +140,7 @@ export const SalesVelocityView = ({ velocityData, days, setDays, loading, onRefr
                       </td>
                       <td>
                         <span style={{ fontSize: '13px', color: isImminentRunOut ? '#dc2626' : '#64748b' }}>
-                          {item.estimatedRunOutDate}
+                          {item.estimatedRunOutDate ? formatIndianDate(item.estimatedRunOutDate) : 'Sufficient stock'}
                         </span>
                       </td>
                     </tr>
