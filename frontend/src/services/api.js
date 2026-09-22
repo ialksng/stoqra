@@ -27,15 +27,46 @@ const getAuthHeaders = () => {
 };
 
 const handleResponse = async (response) => {
-  const json = await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  let data = null;
+
+  if (contentType.includes('application/json')) {
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+  } else {
+    try {
+      const text = await response.text();
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
+
   if (!response.ok) {
-    const errorMsg = json.error || json.message || 'Request failed';
+    let errorMsg = data?.error || data?.message;
+    if (!errorMsg) {
+      if (response.status === 502) {
+        errorMsg = 'Server is currently restarting or deploying a new update. Please wait 15 seconds and retry.';
+      } else if (response.status === 504) {
+        errorMsg = 'Request timed out. Please try again.';
+      } else if (response.status === 413) {
+        errorMsg = 'File too large. Maximum PDF size is 15MB.';
+      } else if (response.status === 401) {
+        errorMsg = 'Your session has expired. Please sign in again.';
+      } else {
+        errorMsg = `Server error (${response.status} ${response.statusText})`;
+      }
+    }
     const error = new Error(errorMsg);
     error.status = response.status;
-    error.details = json.details;
+    error.details = data?.details;
     throw error;
   }
-  return json;
+
+  return data || {};
 };
 
 /* ---------------- AUTHENTICATION APIS ---------------- */
