@@ -75,6 +75,27 @@ export const fetchCurrentUser = async () => {
   return handleResponse(res);
 };
 
+export const fetchUsers = async () => {
+  const res = await fetch(`${API_PREFIX}/auth/users`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
+export const updateUserRole = async (id, role) => {
+  const res = await fetch(`${API_PREFIX}/auth/users/${id}/role`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ role }),
+  });
+  return handleResponse(res);
+};
+
 /* ---------------- INVENTORY & ANALYTICS APIS ---------------- */
 
 export const fetchStockHealth = async () => {
@@ -196,4 +217,6 @@ export default {
   fetchTransactions,
   fetchInvoices,
   triggerGmailSync,
+  fetchUsers,
+  updateUserRole,
 };

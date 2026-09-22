@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2, Users } from 'lucide-react';
 import Navbar from './components/Navbar.jsx';
 import MetricCards from './components/MetricCards.jsx';
 import InventoryTable from './components/InventoryTable.jsx';
 import SalesVelocityView from './components/SalesVelocityView.jsx';
 import InvoicesView from './components/InvoicesView.jsx';
 import TransactionsView from './components/TransactionsView.jsx';
+import TeamView from './components/TeamView.jsx';
 import UploadInvoiceModal from './components/UploadInvoiceModal.jsx';
 import RecordSaleModal from './components/RecordSaleModal.jsx';
 import LoginView from './components/LoginView.jsx';
@@ -19,7 +20,8 @@ import {
 } from './services/api.js';
 
 function Dashboard() {
-  const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'velocity' | 'invoices' | 'ledger'
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('inventory'); // 'inventory' | 'velocity' | 'invoices' | 'ledger' | 'team'
 
   // Analytics & Health state
   const [healthData, setHealthData] = useState(null);
@@ -204,6 +206,15 @@ function Dashboard() {
             <History size={16} />
             Audit Ledger
           </button>
+          {user?.role === 'admin' && (
+            <button
+              className={`tab ${activeTab === 'team' ? 'active' : ''}`}
+              onClick={() => setActiveTab('team')}
+            >
+              <Users size={16} />
+              Team Admins
+            </button>
+          )}
         </nav>
 
         {/* Tab Views */}
@@ -244,6 +255,10 @@ function Dashboard() {
             typeFilter={txTypeFilter}
             setTypeFilter={setTxTypeFilter}
           />
+        )}
+
+        {activeTab === 'team' && (
+          <TeamView onToast={addToast} />
         )}
       </main>
 

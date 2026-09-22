@@ -67,4 +67,17 @@ export const optionalAuth = async (req, res, next) => {
   next();
 };
 
-export default { requireAuth, optionalAuth, JWT_SECRET };
+/**
+ * Middleware: Enforces user has admin privileges
+ */
+export const requireAdmin = async (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied. Administrator privileges required.',
+    });
+  }
+  next();
+};
+
+export default { requireAuth, optionalAuth, requireAdmin, JWT_SECRET };

@@ -4,6 +4,19 @@ import User from '../models/User.js';
 import { JWT_SECRET } from '../middlewares/auth.js';
 
 /**
+ * Parse configured administrator emails from environment variables
+ * Supports comma-separated list in ADMIN_EMAILS and ADMIN_ALERT_EMAIL
+ * e.g., ADMIN_EMAILS=admin1@domain.com, admin2@domain.com
+ */
+export const getAdminEmails = () => {
+  const raw = `${process.env.ADMIN_EMAILS || ''},${process.env.ADMIN_ALERT_EMAIL || ''}`;
+  return raw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+};
+
+/**
  * Get public authentication configuration for frontend initialization
  * GET /api/auth/config
  */
@@ -62,8 +75,8 @@ export const googleLogin = async (req, res, next) => {
     const name = payload.name || email.split('@')[0];
     const avatar = payload.picture || null;
 
-    const adminEmail = (process.env.ADMIN_ALERT_EMAIL || '').toLowerCase().trim();
-    const isAdmin = adminEmail && email === adminEmail;
+    const adminEmails = getAdminEmails();
+    const isConfiguredAdmin = adminEmails.includes(email);
 
     // Upsert user in database
     let user = await User.findOne({
@@ -76,14 +89,15 @@ export const googleLogin = async (req, res, next) => {
         email,
         name,
         avatar,
-        role: isAdmin ? 'admin' : 'staff',
+        role: isConfiguredAdmin ? 'admin' : 'staff',
         lastLogin: new Date(),
       });
     } else {
       user.googleId = googleId;
       user.avatar = avatar || user.avatar;
       user.lastLogin = new Date();
-      if (isAdmin && user.role !== 'admin') {
+      // If listed in ADMIN_EMAILS, automatically promote to admin
+      if (isConfiguredAdmin && user.role !== 'admin') {
         user.role = 'admin';
       }
       await user.save();
@@ -186,9 +200,90 @@ export const demoLogin = async (req, res, next) => {
   }
 };
 
+/**
+ * List all users (Protected: Admins only)
+ * GET /api/auth/users
+ */
+export const listUsers = async (req, res, next) => {
+  try {
+    const users = await User.find({})
+      .select('-__v')
+      .sort({ role: 1, lastLogin: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      users: users.map((u) => ({
+        id: u._id,
+        email: u.email,
+        name: u.name,
+        avatar: u.avatar,
+        role: u.role,
+        lastLogin: u.lastLogin,
+        createdAt: u.createdAt,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update user role (promote to admin or demote to staff)
+ * PATCH /api/auth/users/:id/role
+ */
+export const updateUserRole = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!['admin', 'staff'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Role must be either "admin" or "staff".',
+      });
+    }
+
+    const targetUser = await User.findById(id);
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found.',
+      });
+    }
+
+    // Safety guard: Prevent an admin from demoting themselves
+    if (targetUser._id.toString() === req.user.userId && role !== 'admin') {
+      return res.status(400).json({
+        success: false,
+        error: 'You cannot demote yourself from admin status.',
+      });
+    }
+
+    targetUser.role = role;
+    await targetUser.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `User ${targetUser.name || targetUser.email} is now an ${role}.`,
+      user: {
+        id: targetUser._id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
+  getAdminEmails,
   getAuthConfig,
   googleLogin,
   getCurrentUser,
   demoLogin,
+  listUsers,
+  updateUserRole,
 };

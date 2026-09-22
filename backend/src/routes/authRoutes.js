@@ -4,8 +4,10 @@ import {
   googleLogin,
   getCurrentUser,
   demoLogin,
+  listUsers,
+  updateUserRole,
 } from '../controllers/authController.js';
-import { requireAuth } from '../middlewares/auth.js';
+import { requireAuth, requireAdmin } from '../middlewares/auth.js';
 
 const router = Router();
 
@@ -20,5 +22,9 @@ router.get('/me', requireAuth, getCurrentUser);
 
 // Developer demo login
 router.post('/demo', demoLogin);
+
+// Team & User Management (Protected: Admins only)
+router.get('/users', requireAuth, requireAdmin, listUsers);
+router.patch('/users/:id/role', requireAuth, requireAdmin, updateUserRole);
 
 export default router;
