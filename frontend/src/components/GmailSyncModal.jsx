@@ -18,7 +18,7 @@ import {
 import { triggerGmailSync, getGmailSyncStatus } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export const GmailSyncModal = ({ isOpen, onClose, onSyncFinished, forceRescan = false }) => {
+export const GmailSyncModal = ({ isOpen, onClose, onOpenUpload, onSyncFinished, forceRescan = false }) => {
   const { user, authConfig } = useAuth();
   const [progress, setProgress] = useState(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -65,13 +65,15 @@ export const GmailSyncModal = ({ isOpen, onClose, onSyncFinished, forceRescan = 
               setCachedUserToken(tokenResponse.access_token);
               resolve(tokenResponse.access_token);
             } else if (tokenResponse?.error) {
-              reject(new Error(tokenResponse.error_description || tokenResponse.error || 'Permission was denied or closed.'));
+              const desc = tokenResponse.error_description || tokenResponse.error || '';
+              reject(new Error(desc));
             } else {
               reject(new Error('No access token received from Google.'));
             }
           },
           error_callback: (err) => {
-            reject(new Error(err.message || 'Google authorization dialog error.'));
+            const msg = err?.message || err?.error || 'Google authorization dialog error.';
+            reject(new Error(msg));
           },
         });
 
@@ -91,7 +93,20 @@ export const GmailSyncModal = ({ isOpen, onClose, onSyncFinished, forceRescan = 
       await startSync(forceRescan, accessToken);
     } catch (err) {
       console.warn('[GmailSyncModal] Auth error:', err.message);
-      setError(err.message || 'Failed to authorize Gmail access. Please try again.');
+      const isBlocked =
+        err.message?.includes('access_denied') ||
+        err.message?.includes('403') ||
+        err.message?.includes('verification') ||
+        err.message?.includes('not completed') ||
+        err.message?.includes('test');
+
+      if (isBlocked) {
+        setError(
+          `Google OAuth Access Blocked: Account "${user?.email}" has not been added to Google Cloud "Test Users". Google requires unverified apps in testing mode to authorize each tester email in Google Cloud Console.`
+        );
+      } else {
+        setError(err.message || 'Failed to authorize Gmail access. Please try again.');
+      }
     } finally {
       setAuthorizing(false);
     }
@@ -282,24 +297,56 @@ export const GmailSyncModal = ({ isOpen, onClose, onSyncFinished, forceRescan = 
           </button>
         </div>
 
-        {/* Error notification */}
+        {/* Error notification & Google Test User Guidance */}
         {error && (
           <div
             style={{
-              padding: '12px 14px',
-              backgroundColor: '#fef2f2',
-              border: '1px solid #fecaca',
-              borderRadius: '10px',
-              color: '#dc2626',
+              padding: '14px 16px',
+              backgroundColor: '#fff7ed',
+              border: '1px solid #fed7aa',
+              borderRadius: '12px',
+              color: '#9a3412',
               fontSize: '13px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
               marginBottom: '16px',
             }}
           >
-            <AlertCircle size={16} />
-            <span>{error}</span>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '8px' }}>
+              <AlertCircle size={18} color="#ea580c" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: '700', color: '#c2410c', marginBottom: '4px' }}>
+                  Google Permission Requirement
+                </div>
+                <div>{error}</div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #ffedd5',
+                marginTop: '8px',
+                fontSize: '12px',
+                color: '#7c2d12',
+                lineHeight: 1.5,
+              }}
+            >
+              <strong>Developer Action Required:</strong> To enable Gmail sync for <code>{user?.email}</code>, add this email address under <strong>Google Cloud Console &rarr; APIs & Services &rarr; OAuth consent screen &rarr; Test users</strong>.
+            </div>
+
+            {onOpenUpload && (
+              <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={onOpenUpload}
+                  className="btn btn-primary btn-sm"
+                  style={{ backgroundColor: '#ea580c', borderColor: '#c2410c' }}
+                >
+                  Upload Bill PDF Directly (No Google Setup Required)
+                </button>
+              </div>
+            )}
           </div>
         )}
 

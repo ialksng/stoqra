@@ -565,9 +565,14 @@ function Dashboard() {
           setSyncModalOpen(false);
           refreshAllData();
         }}
+        onOpenUpload={() => {
+          setSyncModalOpen(false);
+          setUploadModalOpen(true);
+        }}
         forceRescan={syncForceRescan}
         onSyncFinished={() => {
           refreshAllData();
+          loadStaged();
         }}
       />
 
