@@ -146,6 +146,8 @@ export default function App() {
             mediaPlaybackRequiresUserAction={false}
             sharedCookiesEnabled={true}
             thirdPartyCookiesEnabled={true}
+            javaScriptCanOpenWindowsAutomatically={true}
+            setSupportMultipleWindows={false}
             // Allow file uploads (invoice PDFs)
             allowsProtectedMedia={true}
             // iOS specific
@@ -162,8 +164,12 @@ export default function App() {
             }}
             // Pull-to-refresh on mobile feel
             pullToRefreshEnabled={true}
-            // User agent
-            applicationNameForUserAgent="StoqraMobile/1.0"
+            // Standard Chrome User Agent to bypass Google WebView OAuth block
+            userAgent={
+              Platform.OS === 'android'
+                ? 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
+                : undefined
+            }
           />
 
           {/* Loading overlay */}
