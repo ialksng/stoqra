@@ -88,8 +88,19 @@ export const AuthProvider = ({ children }) => {
     return res;
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const meRes = await fetchCurrentUser();
+      if (meRes.success && meRes.user) {
+        setUser(meRes.user);
+      }
+    } catch (err) {
+      console.warn('[Auth] refreshUser failed:', err.message);
+    }
+  }, []);
+
   /**
-   * Called after store setup is complete — updates the user state and JWT with org info
+   * Called after store setup or switch is complete — updates the user state and JWT with org info
    */
   const completeOrgSetup = useCallback((setupRes) => {
     if (setupRes.token) {
@@ -107,6 +118,18 @@ export const AuthProvider = ({ children }) => {
         .catch(() => {});
     }
   }, []);
+
+  const switchActiveOrg = useCallback((switchRes) => {
+    if (switchRes.token) {
+      setStoredToken(switchRes.token);
+      setToken(switchRes.token);
+    }
+    if (switchRes.user) {
+      setUser(switchRes.user);
+    } else {
+      refreshUser();
+    }
+  }, [refreshUser]);
 
   const logout = useCallback(() => {
     setStoredToken(null);
@@ -134,6 +157,8 @@ export const AuthProvider = ({ children }) => {
         demoLogin,
         logout,
         completeOrgSetup,
+        switchActiveOrg,
+        refreshUser,
       }}
     >
       {children}

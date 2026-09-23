@@ -107,12 +107,13 @@ export const LoginView = () => {
     <div className="login-page">
       <div className="login-card login-card-clean">
         {/* Brand Header */}
-        <div className="login-header">
-          <div className="login-logo">
-            <Package size={34} />
-          </div>
-          <h1 className="login-title">Stoqra</h1>
-          <p className="login-tagline">Automated Inventory Intelligence for Indian Businesses</p>
+        <div className="login-header" style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <img
+            src="/projects/stoqra/stoqra-logo.png"
+            alt="Stoqra"
+            style={{ height: '58px', objectFit: 'contain', margin: '0 auto 12px auto', display: 'block' }}
+          />
+          <p className="login-tagline" style={{ margin: 0, color: 'var(--text-secondary)' }}>Automated Inventory Intelligence for Indian Businesses</p>
         </div>
 
         {/* Error notification */}

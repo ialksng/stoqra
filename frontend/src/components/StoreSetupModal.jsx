@@ -103,20 +103,11 @@ export const StoreSetupModal = ({ user, onSetupComplete }) => {
       >
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div
-            style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 16px',
-            }}
-          >
-            <Store size={28} color="#fff" />
-          </div>
+          <img
+            src="/projects/stoqra/stoqra-logo.png"
+            alt="Stoqra"
+            style={{ height: '52px', objectFit: 'contain', margin: '0 auto 16px auto', display: 'block' }}
+          />
 
           <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: '#0f172a' }}>
             Welcome, {user?.name?.split(' ')[0] || 'there'}! 👋

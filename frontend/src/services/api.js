@@ -359,6 +359,41 @@ export const getMyOrganization = async () => {
   return handleResponse(res);
 };
 
+export const listMyOrganizations = async () => {
+  const res = await fetch(`${API_PREFIX}/org/list`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const createOrganization = async ({ name, type }) => {
+  const res = await fetch(`${API_PREFIX}/org/create`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ name, type }),
+  });
+  return handleResponse(res);
+};
+
+export const switchOrganization = async (id) => {
+  const res = await fetch(`${API_PREFIX}/org/switch/${id}`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const deleteOrganization = async (id) => {
+  const res = await fetch(`${API_PREFIX}/org/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
 // ─── Admin User Management ────────────────────────────────────────────────────
 
 export const deleteUser = async (id) => {

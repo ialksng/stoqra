@@ -14,6 +14,7 @@ import EditItemModal from './components/EditItemModal.jsx';
 import AddItemModal from './components/AddItemModal.jsx';
 import DeleteConfirmModal from './components/DeleteConfirmModal.jsx';
 import StoreSetupModal from './components/StoreSetupModal.jsx';
+import StoreModal from './components/StoreModal.jsx';
 import GmailSyncModal from './components/GmailSyncModal.jsx';
 import LoginView from './components/LoginView.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
@@ -62,6 +63,8 @@ function Dashboard() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState(null);
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
+  const [storeModalOpen, setStoreModalOpen] = useState(false);
+  const [storeModalInitialTab, setStoreModalInitialTab] = useState('manage');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteConfig, setDeleteConfig] = useState({
     title: '',
@@ -228,6 +231,12 @@ function Dashboard() {
     if (activeTab === 'ledger') loadTransactions();
   }, [activeTab, loadSalesVelocity, loadInvoices, loadTransactions]);
 
+  useEffect(() => {
+    if (user?.organizationId) {
+      refreshAllData();
+    }
+  }, [user?.organizationId]);
+
   const handleOpenSaleModal = (item = null) => {
     setSelectedSaleItem(item);
     setSaleModalOpen(true);
@@ -240,6 +249,10 @@ function Dashboard() {
         onOpenUpload={() => setUploadModalOpen(true)}
         onOpenSale={handleOpenSaleModal}
         onOpenAddItem={() => setAddItemModalOpen(true)}
+        onOpenStoreModal={(tab = 'manage') => {
+          setStoreModalInitialTab(tab);
+          setStoreModalOpen(true);
+        }}
         onInstall={deferredPrompt ? handleInstallClick : null}
         onOpenSyncModal={(force = false) => {
           setSyncForceRescan(force);
@@ -430,6 +443,21 @@ function Dashboard() {
         onClose={() => setDeleteModalOpen(false)}
       />
 
+      {/* Multi-Store & Organization Switcher Modal */}
+      <StoreModal
+        isOpen={storeModalOpen}
+        initialTab={storeModalInitialTab}
+        onClose={() => setStoreModalOpen(false)}
+        onStoreChanged={(newStore) => {
+          if (newStore) {
+            addToast(`Active store set to "${newStore.name}"`, 'success');
+          } else {
+            addToast('Store updated', 'info');
+          }
+          refreshAllData();
+        }}
+      />
+
       {/* Live Gmail Sync Progress Modal */}
       <GmailSyncModal
         isOpen={syncModalOpen}
@@ -462,10 +490,14 @@ function AppShell() {
   if (loading) {
     return (
       <div className="app-loading-screen">
-        <div className="app-loading-card">
-          <Loader2 size={36} className="animate-spin text-primary" />
-          <h2>Stoqra</h2>
-          <p>Verifying secure session...</p>
+        <div className="app-loading-card" style={{ textAlign: 'center' }}>
+          <img
+            src="/projects/stoqra/stoqra-logo.png"
+            alt="Stoqra"
+            style={{ height: '48px', objectFit: 'contain', margin: '0 auto 16px auto', display: 'block' }}
+          />
+          <Loader2 size={24} className="animate-spin text-primary" style={{ margin: '0 auto 8px auto' }} />
+          <p style={{ margin: 0, color: 'var(--text-secondary)' }}>Verifying secure session...</p>
         </div>
       </div>
     );
