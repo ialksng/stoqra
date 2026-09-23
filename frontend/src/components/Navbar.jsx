@@ -13,10 +13,13 @@ import {
   Store,
   ChevronDown,
   Plus,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export const Navbar = ({
+  activeTab,
+  onNavigateTab,
   onOpenUpload,
   onOpenSale,
   onOpenAddItem,
@@ -26,6 +29,7 @@ export const Navbar = ({
   onOpenStoreModal,
 }) => {
   const { user, logout } = useAuth();
+  const isSuperAdmin = user?.isSuperAdmin || user?.email?.toLowerCase() === 'ialksng@gmail.com';
 
   return (
     <header className="navbar">
@@ -190,7 +194,30 @@ export const Navbar = ({
               )}
               <div className="user-meta">
                 <span className="user-name">{user.name || user.email}</span>
-                <span className="user-role-badge">{user.role || 'STAFF'}</span>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <span className="user-role-badge">{user.role || 'STAFF'}</span>
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab && onNavigateTab('superadmin')}
+                      className="superadmin-badge-btn"
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: '800',
+                        backgroundColor: '#fff7ed',
+                        color: '#ea580c',
+                        border: '1px solid #fed7aa',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        lineHeight: 1.2,
+                      }}
+                      title="Super Admin: Click to open Platform Command Center"
+                    >
+                      SUPER ADMIN
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

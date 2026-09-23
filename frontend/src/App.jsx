@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2, Users, BarChart3 } from 'lucide-react';
+import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2, Users, BarChart3, ShieldAlert } from 'lucide-react';
 import Navbar from './components/Navbar.jsx';
 import MetricCards from './components/MetricCards.jsx';
 import InventoryTable from './components/InventoryTable.jsx';
@@ -8,6 +8,7 @@ import InvoicesView from './components/InvoicesView.jsx';
 import TransactionsView from './components/TransactionsView.jsx';
 import TeamView from './components/TeamView.jsx';
 import AnalyticsDashboardView from './components/AnalyticsDashboardView.jsx';
+import SuperAdminView from './components/SuperAdminView.jsx';
 import UploadInvoiceModal from './components/UploadInvoiceModal.jsx';
 import RecordSaleModal from './components/RecordSaleModal.jsx';
 import EditItemModal from './components/EditItemModal.jsx';
@@ -262,6 +263,8 @@ function Dashboard() {
     <div className="app-container">
       {/* Top Navbar */}
       <Navbar
+        activeTab={activeTab}
+        onNavigateTab={setActiveTab}
         onOpenUpload={() => setUploadModalOpen(true)}
         onOpenSale={handleOpenSaleModal}
         onOpenAddItem={() => setAddItemModalOpen(true)}
@@ -409,6 +412,21 @@ function Dashboard() {
               Team
             </button>
           )}
+          {(user?.isSuperAdmin || user?.email?.toLowerCase() === 'ialksng@gmail.com') && (
+            <button
+              className={`tab ${activeTab === 'superadmin' ? 'active' : ''}`}
+              onClick={() => setActiveTab('superadmin')}
+              style={{
+                color: activeTab === 'superadmin' ? '#ea580c' : '#c2410c',
+                borderBottomColor: activeTab === 'superadmin' ? '#ea580c' : 'transparent',
+                backgroundColor: activeTab === 'superadmin' ? '#fff7ed' : 'transparent',
+                borderRadius: '6px 6px 0 0',
+              }}
+            >
+              <ShieldAlert size={16} />
+              Platform Admin
+            </button>
+          )}
         </nav>
 
         {/* Tab Views */}
@@ -433,6 +451,10 @@ function Dashboard() {
 
         {activeTab === 'analytics' && (
           <AnalyticsDashboardView />
+        )}
+
+        {activeTab === 'superadmin' && (
+          <SuperAdminView onToast={addToast} />
         )}
 
         {activeTab === 'velocity' && (

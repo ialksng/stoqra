@@ -825,64 +825,257 @@ body {
   letter-spacing: 0.3px;
 }
 
-/* ---------------- Responsive Design (Mobile / Tablet) ---------------- */
+/* ---------------- 100% Mobile Responsive Architecture ---------------- */
+
+/* Viewport and Layout Safeguards */
+html,
+body,
+#root,
+.app-container {
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Tablet & Smaller Desktops (<= 1024px) */
+@media (max-width: 1024px) {
+  .navbar {
+    padding: 12px 18px;
+  }
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .main-content {
+    padding: 20px 16px;
+  }
+}
+
+/* Mobile & Phablet Screens (<= 768px) */
 @media (max-width: 768px) {
   .navbar {
-    padding: 10px 14px;
-    flex-wrap: wrap;
+    padding: 10px 12px;
+    flex-direction: column;
+    align-items: stretch;
     gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
   }
 
-  .nav-actions {
-    flex-wrap: wrap;
-    gap: 8px;
+  /* Top Navbar Row: Brand & User */
+  .brand {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     width: 100%;
-    justify-content: flex-start;
+    flex-wrap: nowrap;
+  }
+
+  .store-pill-btn {
+    max-width: 130px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .store-pill-btn span:first-of-type {
+    max-width: 65px !important;
+  }
+
+  /* Action Buttons Row on Mobile: Horizontal scrollable pill bar */
+  .nav-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    padding-bottom: 2px;
+    width: 100%;
+  }
+
+  .nav-actions::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-actions .btn {
-    font-size: 12px;
+    flex-shrink: 0;
     padding: 6px 10px;
-  }
-
-  .main-content {
-    padding: 14px 10px;
-  }
-
-  .cards-grid {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px;
-  }
-
-  .metric-card {
-    padding: 14px;
-  }
-
-  .metric-value {
-    font-size: 20px;
-  }
-
-  .tabs {
-    overflow-x: auto;
+    font-size: 12px;
     white-space: nowrap;
+  }
+
+  .user-profile-menu {
+    padding-left: 8px;
+    border-left: none;
+    margin-left: auto;
+  }
+
+  .user-chip {
+    padding: 3px 8px 3px 4px;
+    gap: 6px;
+  }
+
+  .user-name {
+    display: none; /* Keep clean and compact on phone screens */
+  }
+
+  /* Main container */
+  .main-content {
+    padding: 12px 10px;
+  }
+
+  /* Horizontally Swipeable Navigation Tabs */
+  .tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
+    scrollbar-width: none;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 2px;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .tab {
+    flex-shrink: 0;
+    white-space: nowrap;
     padding: 8px 12px;
     font-size: 13px;
   }
 
-  .table-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  /* KPI Cards Grid */
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 18px;
   }
 
+  .metric-card {
+    padding: 12px 14px !important;
+  }
+
+  .metric-title {
+    font-size: 11px;
+  }
+
+  .metric-value {
+    font-size: 19px !important;
+  }
+
+  /* Tables & Responsive Containers */
+  .table-responsive,
+  .table-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+
+  .table-responsive table {
+    min-width: 600px;
+  }
+
+  /* Modals: Guarantee full visibility on mobile */
+  .modal-overlay,
+  .modal-backdrop {
+    padding: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .modal-content,
+  .modal-card {
+    width: 96% !important;
+    max-width: 96vw !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    margin: auto !important;
+    padding: 16px 14px !important;
+    border-radius: 14px !important;
+  }
+
+  /* POS / Record Sale Modal Mobile Layout */
+  .pos-modal-layout {
+    grid-template-columns: 1fr !important;
+    overflow-y: auto !important;
+  }
+
+  .pos-modal-left {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    max-height: 260px !important;
+    overflow-y: auto !important;
+    padding: 12px !important;
+  }
+
+  .pos-modal-right {
+    max-height: none !important;
+    padding: 14px 12px !important;
+  }
+
+  /* Slide-over Drawer on Mobile */
+  .drawer-container {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+
+  /* Inbound Review Notification */
+  .alert-banner {
+    padding: 12px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  /* Clean Login Card */
   .login-card-clean {
-    margin: 16px;
-    padding: 28px 20px 24px 20px;
-    max-width: 92vw;
+    margin: 12px;
+    padding: 24px 18px;
+    max-width: 94vw;
   }
 }
+
+/* Extra-Small Mobile Screens (<= 420px: iPhone SE, Galaxy S, etc.) */
+@media (max-width: 420px) {
+  .navbar {
+    padding: 8px 10px;
+  }
+
+  .brand a span {
+    font-size: 16px;
+  }
+
+  .cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .metric-card {
+    padding: 10px 12px !important;
+  }
+
+  .metric-value {
+    font-size: 18px !important;
+  }
+
+  .btn {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .tab {
+    padding: 6px 10px;
+    font-size: 12px;
+    gap: 5px;
+  }
+}
+
 

@@ -457,6 +457,40 @@ export const deleteUser = async (id) => {
   return handleResponse(res);
 };
 
+// ─── Super Admin Platform Oversight (ialksng@gmail.com) ───────────────────────
+
+export const fetchSuperAdminOverview = async () => {
+  const res = await fetch(`${API_PREFIX}/superadmin/overview`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const fetchSuperAdminUsers = async (search = '') => {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  const res = await fetch(`${API_PREFIX}/superadmin/users?${params.toString()}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const fetchSuperAdminStores = async (search = '') => {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  const res = await fetch(`${API_PREFIX}/superadmin/stores?${params.toString()}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const fetchSuperAdminStoreCatalog = async (orgId) => {
+  const res = await fetch(`${API_PREFIX}/superadmin/stores/${orgId}/catalog`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
 export default {
   getStoredToken,
   setStoredToken,
@@ -478,4 +512,9 @@ export default {
   getStoreTypes,
   setupOrganization,
   getMyOrganization,
+  fetchSuperAdminOverview,
+  fetchSuperAdminUsers,
+  fetchSuperAdminStores,
+  fetchSuperAdminStoreCatalog,
 };
+

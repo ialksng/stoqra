@@ -8,6 +8,7 @@ import inventoryRoutes from './routes/inventoryRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import orgRoutes from './routes/orgRoutes.js';
+import superAdminRoutes from './routes/superAdminRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,6 +77,9 @@ app.use('/projects/stoqra/api/auth', authRoutes);
 
 app.use('/api/org', orgRoutes);
 app.use('/projects/stoqra/api/org', orgRoutes);
+
+app.use('/api/superadmin', superAdminRoutes);
+app.use('/projects/stoqra/api/superadmin', superAdminRoutes);
 
 // Static frontend serving (Production / Build mode)
 // Supports both root and /projects/stoqra base paths

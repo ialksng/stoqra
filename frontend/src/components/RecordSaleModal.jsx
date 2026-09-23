@@ -340,9 +340,10 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', flex: 1, minHeight: 0 }}>
+        <div className="pos-modal-layout" style={{ flex: 1, minHeight: 0 }}>
           {/* Left Column: Product Selection & Catalog Grid */}
           <div
+            className="pos-modal-left"
             style={{
               padding: '18px 20px',
               borderRight: '1px solid var(--border)',
@@ -467,6 +468,7 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
           {/* Right Column: Checkout Cart & Quick Payment */}
           <form
             onSubmit={handleCheckout}
+            className="pos-modal-right"
             style={{
               padding: '18px 20px',
               display: 'flex',

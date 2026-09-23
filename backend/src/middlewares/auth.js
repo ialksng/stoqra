@@ -109,4 +109,36 @@ export const requireOrg = async (req, res, next) => {
   next();
 };
 
-export default { requireAuth, optionalAuth, requireAdmin, requireOrg, JWT_SECRET };
+/**
+ * Helper: Check if an email belongs to the platform Super Admin
+ * Hardcodes ialksng@gmail.com and also checks ADMIN_EMAILS / ADMIN_ALERT_EMAIL
+ */
+export const isSuperAdminEmail = (email) => {
+  if (!email) return false;
+  const normalized = email.toLowerCase().trim();
+  if (normalized === 'ialksng@gmail.com') return true;
+
+  const raw = `${process.env.ADMIN_EMAILS || ''},${process.env.ADMIN_ALERT_EMAIL || ''}`;
+  const adminEmails = raw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  return adminEmails.includes(normalized);
+};
+
+/**
+ * Middleware: Enforces user is the platform Super Admin (ialksng@gmail.com)
+ */
+export const requireSuperAdmin = async (req, res, next) => {
+  if (!req.user || !isSuperAdminEmail(req.user.email)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied: Platform Super Admin privileges required.',
+    });
+  }
+  next();
+};
+
+export default { requireAuth, optionalAuth, requireAdmin, requireOrg, requireSuperAdmin, isSuperAdminEmail, JWT_SECRET };
+

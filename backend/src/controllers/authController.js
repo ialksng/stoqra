@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Organization from '../models/Organization.js';
-import { JWT_SECRET } from '../middlewares/auth.js';
+import { JWT_SECRET, isSuperAdminEmail } from '../middlewares/auth.js';
 
 /**
  * Parse configured administrator emails from environment variables
@@ -25,6 +25,9 @@ const buildUserResponse = (user, org = null) => ({
   name: user.name,
   avatar: user.avatar,
   role: user.role,
+  isSuperAdmin: isSuperAdminEmail(user.email),
+  gmailConnectedEmail: user.gmailConnectedEmail || null,
+  lastGmailSync: user.lastGmailSync || null,
   organizationId: user.organizationId || null,
   isOnboarded: user.isOnboarded || false,
   organization: org

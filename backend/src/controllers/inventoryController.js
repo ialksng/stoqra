@@ -211,10 +211,20 @@ export const triggerGmailSync = async (req, res, next) => {
   try {
     const forceRescan = req.body?.forceRescan === true || req.query?.force === 'true';
     const organizationId = req.user?.organizationId;
-    console.log(`[InventoryController] Manual trigger received for Gmail sync (forceRescan=${forceRescan}, org=${organizationId})...`);
+    const userEmail = req.user?.email;
+    const userId = req.user?.userId;
+    const userAccessToken = req.body?.userAccessToken || null;
 
-    // Launch sync process (runs asynchronously if already running or starts new cycle)
-    const resultPromise = syncGmailInvoices({ forceRescan, organizationId });
+    console.log(`[InventoryController] Manual trigger received for Gmail sync (user=${userEmail}, forceRescan=${forceRescan}, org=${organizationId}, hasToken=${Boolean(userAccessToken)})...`);
+
+    // Launch sync process with user-scoped credentials
+    const resultPromise = syncGmailInvoices({
+      forceRescan,
+      organizationId,
+      userEmail,
+      userId,
+      userAccessToken,
+    });
 
     // If caller requests instant background execution
     if (req.query?.async === 'true') {
@@ -226,6 +236,16 @@ export const triggerGmailSync = async (req, res, next) => {
     }
 
     const result = await resultPromise;
+
+    if (result?.status === 'needs_authorization' || result?.needsAuth) {
+      return res.status(200).json({
+        success: false,
+        needsAuth: true,
+        error: result.error || result.message || 'Gmail access permission required.',
+        message: result.error || result.message || 'Gmail access permission required.',
+        progress: getSyncProgress(),
+      });
+    }
 
     return res.status(200).json({
       success: true,

@@ -47,6 +47,16 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    gmailConnectedEmail: {
+      type: String,
+      default: null,
+      lowercase: true,
+      trim: true,
+    },
+    lastGmailSync: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

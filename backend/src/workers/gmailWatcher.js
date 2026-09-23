@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import mongoose from 'mongoose';
+import { google } from 'googleapis';
 import { getGmailClient } from '../config/googleAuth.js';
 import { cleanupLegacyIndexes } from '../config/db.js';
 import Invoice from '../models/Invoice.js';
@@ -194,13 +195,91 @@ export const syncGmailInvoices = async (options = {}) => {
     details: [],
   };
 
-  const refreshTokens = (process.env.GMAIL_REFRESH_TOKEN || '')
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const userEmail = (options?.userEmail || '').toLowerCase().trim();
+  const userAccessToken = options?.userAccessToken || null;
+  const clientsToScan = [];
 
-  if (refreshTokens.length === 0) {
-    const errorMsg = 'Missing Gmail OAuth credentials in .env';
+  if (userAccessToken) {
+    try {
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID,
+        process.env.GMAIL_CLIENT_SECRET
+      );
+      oauth2Client.setCredentials({ access_token: userAccessToken });
+      const client = google.gmail({ version: 'v1', auth: oauth2Client });
+
+      const profile = await client.users.getProfile({ userId: 'me' });
+      const mailboxEmail = (profile.data?.emailAddress || '').toLowerCase().trim();
+
+      if (userEmail && mailboxEmail && mailboxEmail !== userEmail) {
+        const mismatchError = `Connected Gmail account (${mailboxEmail}) does not match your Stoqra user (${userEmail}). Please authorize with ${userEmail}.`;
+        console.warn(`[GmailWatcher] Email mismatch: ${mismatchError}`);
+        isSyncInProgress = false;
+        syncStartTime = null;
+        syncProgress.inProgress = false;
+        syncProgress.statusMessage = mismatchError;
+        return { status: 'error', needsAuth: true, error: mismatchError };
+      }
+
+      if (mailboxEmail) {
+        await User.findOneAndUpdate(
+          { email: mailboxEmail },
+          { gmailConnectedEmail: mailboxEmail, lastGmailSync: new Date() }
+        ).catch(() => {});
+      }
+
+      clientsToScan.push({ client, mailboxEmail: mailboxEmail || userEmail });
+    } catch (authErr) {
+      console.error('[GmailWatcher] Failed to verify user access token:', authErr.message);
+      isSyncInProgress = false;
+      syncStartTime = null;
+      syncProgress.inProgress = false;
+      syncProgress.statusMessage = `Gmail authorization invalid or expired: ${authErr.message}`;
+      return {
+        status: 'needs_authorization',
+        needsAuth: true,
+        error: `Gmail authorization invalid or expired: ${authErr.message}. Please click "Authorize & Sync My Gmail".`,
+      };
+    }
+  } else {
+    // No access token provided.
+    // Check if user is ialksng@gmail.com or configured admin
+    const isAdmin =
+      userEmail === 'ialksng@gmail.com' ||
+      (process.env.ADMIN_EMAILS || '').toLowerCase().includes(userEmail);
+
+    if (isAdmin && process.env.GMAIL_REFRESH_TOKEN) {
+      const refreshTokens = (process.env.GMAIL_REFRESH_TOKEN || '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      for (const token of refreshTokens) {
+        try {
+          const client = getGmailClient(token);
+          clientsToScan.push({ client, mailboxEmail: userEmail || 'ialksng@gmail.com' });
+        } catch (clientErr) {
+          console.warn(`[GmailWatcher] Skipping token due to auth error: ${clientErr.message}`);
+        }
+      }
+    } else {
+      // Regular user trying to sync without token: NEVER fall back to someone else's account!
+      const authRequiredMsg = `Gmail authorization required for ${userEmail || 'your account'}. Please click "Authorize & Sync My Gmail".`;
+      console.warn(`[GmailWatcher] Blocked unauthorized sync attempt for ${userEmail}: Needs user's own token.`);
+      isSyncInProgress = false;
+      syncStartTime = null;
+      syncProgress.inProgress = false;
+      syncProgress.statusMessage = authRequiredMsg;
+      return {
+        status: 'needs_authorization',
+        needsAuth: true,
+        error: authRequiredMsg,
+      };
+    }
+  }
+
+  if (clientsToScan.length === 0) {
+    const errorMsg = 'No authorized Gmail account available to scan.';
     console.warn(`[GmailWatcher] Skipping poll: ${errorMsg}`);
     isSyncInProgress = false;
     syncStartTime = null;
@@ -212,14 +291,11 @@ export const syncGmailInvoices = async (options = {}) => {
   const orgFilter = organizationId ? { organizationId } : {};
 
   try {
-    for (const token of refreshTokens) {
-      let gmail;
-      try {
-        gmail = getGmailClient(token);
-      } catch (clientErr) {
-        console.warn(`[GmailWatcher] Skipping token due to auth error: ${clientErr.message}`);
-        continue;
-      }
+    for (const { client: gmail, mailboxEmail } of clientsToScan) {
+      syncProgress.logs.unshift({
+        type: 'info',
+        text: `Connected to Gmail mailbox for ${mailboxEmail}. Scanning for invoices...`,
+      });
 
       // 1. Clean cache if force rescan or purge transient errors
       if (forceRescan) {
