@@ -824,3 +824,65 @@ body {
   border-radius: 9999px;
   letter-spacing: 0.3px;
 }
+
+/* ---------------- Responsive Design (Mobile / Tablet) ---------------- */
+@media (max-width: 768px) {
+  .navbar {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .nav-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .nav-actions .btn {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .main-content {
+    padding: 14px 10px;
+  }
+
+  .cards-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+
+  .metric-card {
+    padding: 14px;
+  }
+
+  .metric-value {
+    font-size: 20px;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .tab {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .login-card-clean {
+    margin: 16px;
+    padding: 28px 20px 24px 20px;
+    max-width: 92vw;
+  }
+}
+

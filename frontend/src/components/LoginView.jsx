@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Package, AlertCircle, Loader2, Shield, LogIn } from 'lucide-react';
+import { Package, AlertCircle, Loader2, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export const LoginView = () => {
@@ -88,21 +88,7 @@ export const LoginView = () => {
     };
   }, [authConfig?.googleClientId]);
 
-  // 3. Direct OAuth Fallback for WebViews & Mobile Browsers
-  const handleDirectOAuth = () => {
-    if (!authConfig?.googleClientId) {
-      setError('Google Client ID not configured.');
-      return;
-    }
 
-    const redirectUri = window.location.origin + window.location.pathname;
-    const nonce = Math.random().toString(36).substring(2) + Date.now().toString(36);
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
-      authConfig.googleClientId
-    )}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=id_token&scope=openid%20profile%20email&nonce=${nonce}&prompt=select_account`;
-
-    window.location.href = authUrl;
-  };
 
   return (
     <div className="login-page">
@@ -135,36 +121,6 @@ export const LoginView = () => {
               </div>
             )}
           </div>
-
-          {/* Direct Login Button Fallback */}
-          {authConfig?.googleClientId && (
-            <button
-              onClick={handleDirectOAuth}
-              style={{
-                marginTop: '12px',
-                width: '100%',
-                maxWidth: '320px',
-                padding: '10px 16px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                background: '#ffffff',
-                color: '#334155',
-                fontSize: '13px',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
-              onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
-            >
-              <LogIn size={15} color="#2563eb" />
-              <span>Direct Google Sign-In (App Mode)</span>
-            </button>
-          )}
 
           {!authConfig?.googleClientId && (
             <div className="google-setup-notice">
