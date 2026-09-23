@@ -36,7 +36,7 @@ const INJECTED_JS = `
       lastTouchEnd = now;
     }, false);
 
-    true; // Required return value
+    true;
   })();
 `;
 
@@ -44,7 +44,7 @@ const INJECTED_JS = `
 export default function App() {
   const webViewRef = useRef(null);
   const [canGoBack, setCanGoBack] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -65,7 +65,7 @@ export default function App() {
 
   const handleReload = () => {
     setHasError(false);
-    setIsLoading(true);
+    setIsInitialLoading(true);
     webViewRef.current?.reload();
   };
 
@@ -117,14 +117,24 @@ export default function App() {
             // Navigation
             onNavigationStateChange={(navState) => {
               setCanGoBack(navState.canGoBack);
+              if (navState.url && navState.url.includes('/projects/stoqra')) {
+                setHasError(false);
+              }
             }}
-            // Loading states
-            onLoadStart={() => setIsLoading(true)}
-            onLoadEnd={() => setIsLoading(false)}
+            // Loading states - only show initial spinner, never block OAuth redirects
+            onLoadEnd={() => setIsInitialLoading(false)}
             onError={(syntheticEvent) => {
               const { nativeEvent } = syntheticEvent;
+              // Don't show error screen on OAuth intermediate redirects
+              if (
+                nativeEvent.url &&
+                (nativeEvent.url.includes('accounts.google.com') ||
+                  nativeEvent.url.includes('google.com/gsi'))
+              ) {
+                return;
+              }
               setHasError(true);
-              setIsLoading(false);
+              setIsInitialLoading(false);
               setErrorMessage(
                 nativeEvent.description ||
                 'Could not connect to Stoqra. Please check your internet connection.'
@@ -134,7 +144,7 @@ export default function App() {
               const { nativeEvent } = syntheticEvent;
               if (nativeEvent.statusCode >= 500) {
                 setHasError(true);
-                setIsLoading(false);
+                setIsInitialLoading(false);
                 setErrorMessage(`Server error (${nativeEvent.statusCode}). Please try again in a moment.`);
               }
             }}
@@ -147,7 +157,6 @@ export default function App() {
             sharedCookiesEnabled={true}
             thirdPartyCookiesEnabled={true}
             javaScriptCanOpenWindowsAutomatically={true}
-            setSupportMultipleWindows={false}
             // Allow file uploads (invoice PDFs)
             allowsProtectedMedia={true}
             // iOS specific
@@ -155,16 +164,15 @@ export default function App() {
             bounces={false}
             // Sharing / file downloads
             onFileDownload={({ nativeEvent }) => {
-              // Allow file download via system browser on iOS
               if (Platform.OS === 'ios') {
                 import('expo-web-browser').then(({ openBrowserAsync }) => {
                   openBrowserAsync(nativeEvent.downloadUrl);
                 });
               }
             }}
-            // Pull-to-refresh on mobile feel
+            // Pull-to-refresh on mobile
             pullToRefreshEnabled={true}
-            // Standard Chrome User Agent to bypass Google WebView OAuth block
+            // Standard Chrome User Agent to allow Google OAuth
             userAgent={
               Platform.OS === 'android'
                 ? 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
@@ -172,8 +180,8 @@ export default function App() {
             }
           />
 
-          {/* Loading overlay */}
-          {isLoading && (
+          {/* Initial Loading Overlay only */}
+          {isInitialLoading && (
             <View style={styles.loadingOverlay}>
               <View style={styles.loadingCard}>
                 <ActivityIndicator size="large" color="#2563eb" />
