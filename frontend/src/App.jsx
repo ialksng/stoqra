@@ -250,35 +250,35 @@ function Dashboard() {
             onClick={() => setActiveTab('inventory')}
           >
             <Package size={16} />
-            Inventory Catalog
-          </button>
-          <button
-            className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
-            onClick={() => setActiveTab('analytics')}
-          >
-            <BarChart3 size={16} />
-            Analytics Hub
-          </button>
-          <button
-            className={`tab ${activeTab === 'velocity' ? 'active' : ''}`}
-            onClick={() => setActiveTab('velocity')}
-          >
-            <Activity size={16} />
-            Sales Velocity & Run-out
+            Products & Stock
           </button>
           <button
             className={`tab ${activeTab === 'invoices' ? 'active' : ''}`}
             onClick={() => setActiveTab('invoices')}
           >
             <FileText size={16} />
-            Ingested Invoices
+            Bills & Purchases
+          </button>
+          <button
+            className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            <BarChart3 size={16} />
+            Store Analytics
+          </button>
+          <button
+            className={`tab ${activeTab === 'velocity' ? 'active' : ''}`}
+            onClick={() => setActiveTab('velocity')}
+          >
+            <Activity size={16} />
+            Sales & Run-out
           </button>
           <button
             className={`tab ${activeTab === 'ledger' ? 'active' : ''}`}
             onClick={() => setActiveTab('ledger')}
           >
             <History size={16} />
-            Audit Ledger
+            Stock History
           </button>
           {user?.role === 'admin' && (
             <button
@@ -286,7 +286,7 @@ function Dashboard() {
               onClick={() => setActiveTab('team')}
             >
               <Users size={16} />
-              Team Admins
+              Team
             </button>
           )}
         </nav>

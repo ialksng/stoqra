@@ -20,24 +20,24 @@ export const MetricCards = ({ healthData, onFilterLowStock }) => {
         {/* Valuation Card */}
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">Total Valuation (INR)</span>
+            <span className="metric-title">Total Stock Value</span>
             <IndianRupee size={20} color="#2563eb" />
           </div>
           <div className="metric-value">{formatINR(metrics.totalValuation)}</div>
           <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
-            Across {formatIndianNumber(metrics.totalStockUnits)} total inventory units
+            {formatIndianNumber(metrics.totalStockUnits)} total units in store
           </div>
         </div>
 
         {/* Total SKUs Card */}
         <div className="metric-card">
           <div className="metric-header">
-            <span className="metric-title">Active SKUs</span>
+            <span className="metric-title">Total Products</span>
             <Package size={20} color="#2563eb" />
           </div>
           <div className="metric-value">{formatIndianNumber(metrics.totalSkus)}</div>
           <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
-            Catalog products tracked
+            Unique items tracked
           </div>
         </div>
 
@@ -46,17 +46,17 @@ export const MetricCards = ({ healthData, onFilterLowStock }) => {
           className="metric-card warning"
           style={{ cursor: metrics.lowStockCount > 0 ? 'pointer' : 'default' }}
           onClick={() => metrics.lowStockCount > 0 && onFilterLowStock && onFilterLowStock()}
-          title="Click to filter low stock items"
+          title="Click to see items running low"
         >
           <div className="metric-header">
-            <span className="metric-title">Low Stock SKUs</span>
+            <span className="metric-title">Low on Stock</span>
             <AlertTriangle size={20} color="#f59e0b" />
           </div>
           <div className="metric-value" style={{ color: '#d97706' }}>
             {formatIndianNumber(metrics.lowStockCount)}
           </div>
           <div style={{ fontSize: '13px', color: '#b45309', marginTop: '6px' }}>
-            At or below reorder threshold
+            Needs restocking soon
           </div>
         </div>
 
@@ -70,7 +70,7 @@ export const MetricCards = ({ healthData, onFilterLowStock }) => {
             {formatIndianNumber(metrics.outOfStockCount)}
           </div>
           <div style={{ fontSize: '13px', color: '#b91c1c', marginTop: '6px' }}>
-            Immediate stock replenishment needed
+            Items completely sold out
           </div>
         </div>
       </div>

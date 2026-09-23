@@ -100,16 +100,17 @@ export const invoiceExtractionSchema = {
  * GEMINI_MODEL=gemini-3.8-flash
  */
 const getModelQueue = () => {
-  const customModel = (process.env.GEMINI_MODEL || '').trim();
+  let customModel = (process.env.GEMINI_MODEL || '').trim();
+  if (customModel && (/^gemini-(1\.5|2\.0)/i.test(customModel) || !/^gemini-(2\.5|3\.[0-9])/i.test(customModel))) {
+    customModel = 'gemini-3.5-flash-lite';
+  }
 
   const models = [
     customModel || null,
-
-    // Primary current model
-    'gemini-3.8-flash',
-
-    // Fallback for lower-cost/high-volume extraction
     'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
   ].filter(Boolean);
 
   return [...new Set(models)];
