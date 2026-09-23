@@ -292,13 +292,15 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
       <div
         className="modal-content"
         style={{
-          maxWidth: '960px',
+          maxWidth: '1000px',
           width: '95%',
-          maxHeight: '92vh',
+          height: '88vh',
+          maxHeight: '750px',
           display: 'flex',
           flexDirection: 'column',
           padding: 0,
           overflow: 'hidden',
+          borderRadius: '14px',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -312,6 +314,7 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
             justifyContent: 'space-between',
             background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
             color: '#ffffff',
+            flexShrink: 0,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -334,7 +337,7 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
                 Stoqra Fast Point-of-Sale (POS)
               </h2>
               <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
-                Quick checkout in &lt;3s • Multi-item cart • Instant UPI & Cash logging
+                Quick checkout in &lt;3s • Multi-item cart • Instant UPI &amp; Cash logging
               </p>
             </div>
           </div>
@@ -363,6 +366,7 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
               gap: '10px',
               color: '#b91c1c',
               fontSize: '13px',
+              flexShrink: 0,
             }}
           >
             <AlertCircle size={16} />
@@ -370,18 +374,18 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
           </div>
         )}
 
-        <div className="pos-modal-layout" style={{ flex: 1, minHeight: 0 }}>
+        <div className="pos-modal-layout" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', overflow: 'hidden' }}>
           {/* Left Column: Product Selection & Catalog Grid */}
           <div
             className="pos-modal-left"
             style={{
-              padding: '18px 20px',
+              padding: '16px 18px',
               borderRight: '1px solid var(--border)',
               display: 'flex',
               flexDirection: 'column',
               backgroundColor: '#f8fafc',
               overflowY: 'auto',
-              maxHeight: 'calc(92vh - 130px)',
+              minHeight: 0,
             }}
           >
             {/* Search Input */}
@@ -495,16 +499,15 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
           </div>
 
           {/* Right Column: Checkout Cart & Quick Payment */}
-          <form
-            onSubmit={handleCheckout}
+          <div
             className="pos-modal-right"
             style={{
-              padding: '18px 20px',
+              padding: '16px 18px',
               display: 'flex',
               flexDirection: 'column',
               backgroundColor: '#ffffff',
               overflowY: 'auto',
-              maxHeight: 'calc(92vh - 130px)',
+              minHeight: 0,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -931,57 +934,101 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
               />
             </div>
 
-            {/* Sticky Save & Record Sale Bar */}
-            <div
+          </div>
+        </div>
+
+        {/* Pinned Dedicated Footer with Always-Visible Save Sale Button */}
+        <div
+          className="pos-modal-footer"
+          style={{
+            padding: '12px 24px',
+            borderTop: '1px solid var(--border)',
+            backgroundColor: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            flexShrink: 0,
+            boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.05)',
+            zIndex: 20,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div>
+              <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, display: 'block' }}>
+                Total Due
+              </span>
+              <span style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>
+                {formatINR(totalSubtotal)}
+              </span>
+            </div>
+            <span style={{ height: '28px', width: '1px', backgroundColor: '#e2e8f0' }} />
+            <span
               style={{
-                position: 'sticky',
-                bottom: 0,
-                backgroundColor: '#ffffff',
-                paddingTop: '12px',
-                paddingBottom: '4px',
-                marginTop: 'auto',
-                borderTop: '1px solid #e2e8f0',
-                zIndex: 10,
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#2563eb',
+                backgroundColor: '#eff6ff',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: '1px solid #bfdbfe',
               }}
             >
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={loading || cart.length === 0}
-                style={{
-                  width: '100%',
-                  padding: '13px',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  backgroundColor: cart.length > 0 ? '#16a34a' : '#94a3b8',
-                  borderColor: cart.length > 0 ? '#15803d' : '#cbd5e1',
-                  cursor: cart.length > 0 ? 'pointer' : 'not-allowed',
-                  boxShadow: cart.length > 0 ? '0 4px 6px -1px rgba(22, 163, 74, 0.25)' : 'none',
-                }}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Saving Sale to Ledger...
-                  </>
-                ) : cart.length === 0 ? (
-                  <>
-                    <ShoppingCart size={18} />
-                    Save & Record Sale (Cart Empty - Click Products on Left)
-                  </>
-                ) : (
-                  <>
-                    <Check size={18} />
-                    Save & Record Sale ({formatINR(totalSubtotal)} via {paymentMethod})
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+              {paymentMethod}
+            </span>
+            {totalItemsCount > 0 && (
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                ({totalItemsCount} unit{totalItemsCount !== 1 ? 's' : ''})
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              style={{ padding: '10px 18px', fontSize: '13px' }}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={loading || cart.length === 0}
+              onClick={handleCheckout}
+              style={{
+                padding: '12px 28px',
+                fontSize: '15px',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: cart.length > 0 ? '#16a34a' : '#94a3b8',
+                borderColor: cart.length > 0 ? '#15803d' : '#cbd5e1',
+                cursor: cart.length > 0 ? 'pointer' : 'not-allowed',
+                boxShadow: cart.length > 0 ? '0 4px 12px rgba(22, 163, 74, 0.35)' : 'none',
+              }}
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Saving Sale to Ledger...
+                </>
+              ) : cart.length === 0 ? (
+                <>
+                  <ShoppingCart size={18} />
+                  Add Products to Save Sale
+                </>
+              ) : (
+                <>
+                  <Check size={18} />
+                  Save &amp; Complete Sale ({formatINR(totalSubtotal)})
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
