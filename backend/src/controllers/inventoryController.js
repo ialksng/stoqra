@@ -626,42 +626,61 @@ export const posCheckoutController = async (req, res, next) => {
     const lowStockWarnings = [];
 
     for (const cartItem of items) {
-      const itemDoc = await Item.findOne({
-        _id: cartItem.itemId || cartItem.id || cartItem._id,
-        ...(organizationId && { organizationId }),
-      });
+      let itemDoc = null;
+      if (cartItem.itemId || cartItem.id || cartItem._id) {
+        itemDoc = await Item.findOne({
+          _id: cartItem.itemId || cartItem.id || cartItem._id,
+          ...(organizationId && { organizationId }),
+        });
+      }
+
+      // If not found by ID, look up by name or auto-create custom product
+      if (!itemDoc && cartItem.name?.trim()) {
+        itemDoc = await Item.findOne({
+          name: new RegExp(`^${cartItem.name.trim()}$`, 'i'),
+          ...(organizationId && { organizationId }),
+        });
+
+        if (!itemDoc) {
+          const generatedSku = `CUST-${Date.now().toString().slice(-6)}`;
+          const unitPrice = Number(cartItem.sellingPrice || cartItem.unitSellingPrice || 0);
+          itemDoc = await Item.create({
+            organizationId,
+            sku: generatedSku,
+            name: cartItem.name.trim(),
+            currentStock: Number(cartItem.quantity) || 1,
+            unitCost: unitPrice * 0.7,
+            sellingPrice: unitPrice,
+            reorderLevel: 5,
+            category: 'General',
+            supplier: 'Direct Sale',
+          });
+        }
+      }
 
       if (!itemDoc) {
         return res.status(404).json({
           success: false,
-          error: `Product "${cartItem.name || cartItem.itemId}" not found in inventory.`,
+          error: `Product "${cartItem.name || cartItem.itemId}" could not be identified.`,
         });
       }
 
       const qty = Number(cartItem.quantity) || 1;
-      if (itemDoc.currentStock < qty) {
-        return res.status(400).json({
-          success: false,
-          error: `Insufficient stock for "${itemDoc.name}". Only ${itemDoc.currentStock} unit(s) remaining on shelf.`,
-        });
-      }
-
       const unitSellingPrice = Number(cartItem.unitSellingPrice || cartItem.sellingPrice || itemDoc.sellingPrice || 0);
-      const unitCostPrice = Number(itemDoc.costPrice || (itemDoc.batches?.[0]?.unitCost) || 0);
+      const unitCostPrice = Number(itemDoc.costPrice || (itemDoc.batches?.[0]?.unitCost) || itemDoc.unitCost || 0);
       const subtotal = unitSellingPrice * qty;
       const profit = (unitSellingPrice - unitCostPrice) * qty;
 
       totalAmount += subtotal;
       totalProfit += profit;
 
-      // Decrement stock in catalog
-      itemDoc.currentStock -= qty;
-      if (itemDoc.currentStock <= itemDoc.lowStockThreshold) {
+      // Decrement stock gracefully (cannot drop below 0 in schema)
+      itemDoc.currentStock = Math.max(0, itemDoc.currentStock - qty);
+      if (itemDoc.currentStock <= (itemDoc.reorderLevel || itemDoc.lowStockThreshold || 5)) {
         lowStockWarnings.push({
           itemId: itemDoc._id,
           name: itemDoc.name,
           currentStock: itemDoc.currentStock,
-          lowStockThreshold: itemDoc.lowStockThreshold,
         });
       }
       await itemDoc.save();

@@ -42,6 +42,36 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Quick custom item state
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickName, setQuickName] = useState('');
+  const [quickPrice, setQuickPrice] = useState('');
+  const [quickQty, setQuickQty] = useState(1);
+
+  const handleAddCustomItem = (e) => {
+    if (e) e.preventDefault();
+    if (!quickName.trim()) return;
+    const price = Number(quickPrice) || 0;
+    const qty = Math.max(1, Number(quickQty) || 1);
+    const customLine = {
+      item: {
+        _id: `custom_${Date.now()}`,
+        name: quickName.trim(),
+        sku: `CUST-${Date.now().toString().slice(-4)}`,
+        sellingPrice: price,
+        unitCost: price * 0.7,
+        currentStock: 999,
+      },
+      quantity: qty,
+      sellingPrice: price,
+    };
+    setCart((prev) => [...prev, customLine]);
+    setQuickName('');
+    setQuickPrice('');
+    setQuickQty(1);
+    setShowQuickAdd(false);
+  };
+
   // Fetch catalog products
   useEffect(() => {
     if (!isOpen) return;
@@ -397,15 +427,14 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
                   return (
                     <div
                       key={p._id}
-                      onClick={() => !isOutOfStock && addToCart(p)}
+                      onClick={() => addToCart(p)}
                       style={{
                         backgroundColor: '#ffffff',
                         border: '1px solid',
                         borderColor: inCartQty > 0 ? 'var(--primary)' : 'var(--border)',
                         borderRadius: '8px',
                         padding: '12px',
-                        cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-                        opacity: isOutOfStock ? 0.5 : 1,
+                        cursor: 'pointer',
                         position: 'relative',
                         transition: 'all 0.15s ease',
                         boxShadow: inCartQty > 0 ? '0 0 0 1px var(--primary)' : 'none',
@@ -478,26 +507,107 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
               maxHeight: 'calc(92vh - 130px)',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
                 Cart ({totalItemsCount} item{totalItemsCount !== 1 ? 's' : ''})
               </div>
-              {cart.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <button
                   type="button"
-                  onClick={() => setCart([])}
+                  onClick={() => setShowQuickAdd(!showQuickAdd)}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#dc2626',
-                    fontSize: '12px',
+                    backgroundColor: '#f0fdf4',
+                    border: '1px solid #86efac',
+                    color: '#166534',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '3px 8px',
+                    borderRadius: '5px',
                     cursor: 'pointer',
                   }}
                 >
-                  Clear All
+                  {showQuickAdd ? '✕ Cancel' : '+ Custom Item'}
                 </button>
-              )}
+                {cart.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCart([])}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#dc2626',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Quick Custom Item Inline Form */}
+            {showQuickAdd && (
+              <div
+                style={{
+                  backgroundColor: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '6px',
+                  padding: '10px',
+                  marginBottom: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#166534' }}>
+                  Add Custom Ad-Hoc Product
+                </div>
+                <input
+                  type="text"
+                  placeholder="Item Name (e.g. Paracetamol 500mg)"
+                  className="form-control"
+                  style={{ fontSize: '12px', padding: '5px 8px' }}
+                  value={quickName}
+                  onChange={(e) => setQuickName(e.target.value)}
+                  autoFocus
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '10px', color: '#166534' }}>Qty</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="form-control"
+                      style={{ fontSize: '12px', padding: '4px 6px' }}
+                      value={quickQty}
+                      onChange={(e) => setQuickQty(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '10px', color: '#166534' }}>Selling Price (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      className="form-control"
+                      style={{ fontSize: '12px', padding: '4px 6px' }}
+                      value={quickPrice}
+                      onChange={(e) => setQuickPrice(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ alignSelf: 'flex-end', padding: '6px 12px', fontSize: '12px', backgroundColor: '#16a34a', borderColor: '#15803d' }}
+                    onClick={handleAddCustomItem}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Cart Items List */}
             <div
@@ -514,8 +624,12 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
               }}
             >
               {cart.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 10px', color: '#94a3b8', fontSize: '13px' }}>
-                  Your cart is empty. Click items on the left to add them to this sale.
+                <div style={{ textAlign: 'center', padding: '24px 10px', color: '#64748b', fontSize: '13px' }}>
+                  <ShoppingCart size={24} color="#94a3b8" style={{ margin: '0 auto 6px auto', display: 'block' }} />
+                  <div style={{ fontWeight: 600, color: '#334155' }}>Your Cart is Empty</div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    Click items on the left to add, or click "+ Custom Item" above to add ad-hoc items.
+                  </div>
                 </div>
               ) : (
                 cart.map((line, idx) => (
@@ -817,35 +931,56 @@ export const RecordSaleModal = ({ isOpen, onClose, selectedItem, onSuccess }) =>
               />
             </div>
 
-            {/* Submit Checkout Button */}
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading || cart.length === 0}
+            {/* Sticky Save & Record Sale Bar */}
+            <div
               style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '14px',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
+                position: 'sticky',
+                bottom: 0,
+                backgroundColor: '#ffffff',
+                paddingTop: '12px',
+                paddingBottom: '4px',
                 marginTop: 'auto',
+                borderTop: '1px solid #e2e8f0',
+                zIndex: 10,
               }}
             >
-              {loading ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Recording Sale...
-                </>
-              ) : (
-                <>
-                  <Check size={18} />
-                  Charge {formatINR(totalSubtotal)} ({paymentMethod})
-                </>
-              )}
-            </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={loading || cart.length === 0}
+                style={{
+                  width: '100%',
+                  padding: '13px',
+                  fontSize: '15px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  backgroundColor: cart.length > 0 ? '#16a34a' : '#94a3b8',
+                  borderColor: cart.length > 0 ? '#15803d' : '#cbd5e1',
+                  cursor: cart.length > 0 ? 'pointer' : 'not-allowed',
+                  boxShadow: cart.length > 0 ? '0 4px 6px -1px rgba(22, 163, 74, 0.25)' : 'none',
+                }}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Saving Sale to Ledger...
+                  </>
+                ) : cart.length === 0 ? (
+                  <>
+                    <ShoppingCart size={18} />
+                    Save & Record Sale (Cart Empty - Click Products on Left)
+                  </>
+                ) : (
+                  <>
+                    <Check size={18} />
+                    Save & Record Sale ({formatINR(totalSubtotal)} via {paymentMethod})
+                  </>
+                )}
+              </button>
+            </div>
           </form>
         </div>
       </div>

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Activity, Flame, IndianRupee, FileSpreadsheet } from 'lucide-react';
+import { Activity, Flame, IndianRupee, FileSpreadsheet, ShoppingCart } from 'lucide-react';
 import { formatINR, formatIndianNumber, formatIndianDate } from '../utils/formatters.js';
 import { exportVelocityToExcel } from '../utils/excelExport.js';
 
-export const SalesVelocityView = ({ velocityData, days, setDays, loading }) => {
+export const SalesVelocityView = ({ velocityData, days, setDays, loading, onOpenSaleModal }) => {
   const summary = velocityData?.summary || {
     totalUnitsSold: 0,
     totalRevenue: 0,
@@ -71,6 +71,18 @@ export const SalesVelocityView = ({ velocityData, days, setDays, loading }) => {
               <option value={30}>Last 30 Days</option>
               <option value={60}>Last 60 Days</option>
             </select>
+
+            {onOpenSaleModal && (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => onOpenSaleModal(null)}
+                style={{ backgroundColor: '#16a34a', borderColor: '#15803d' }}
+                title="Record a customer sale"
+              >
+                <ShoppingCart size={14} />
+                <span>Record Sale</span>
+              </button>
+            )}
 
             <button
               className="btn btn-secondary btn-sm"

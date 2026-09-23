@@ -74,9 +74,21 @@ export const InventoryTable = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {onOpenAddItem && (
+          {onOpenSaleModal && (
             <button
               className="btn btn-primary btn-sm"
+              onClick={() => onOpenSaleModal(null)}
+              style={{ backgroundColor: '#16a34a', borderColor: '#15803d' }}
+              title="Record a sale and log payment"
+            >
+              <ShoppingCart size={14} />
+              <span>Record Sale</span>
+            </button>
+          )}
+
+          {onOpenAddItem && (
+            <button
+              className="btn btn-secondary btn-sm"
               onClick={onOpenAddItem}
               title="Add a new product manually"
             >
@@ -176,9 +188,7 @@ export const InventoryTable = ({
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={() => onOpenSaleModal(item)}
-                          disabled={item.currentStock <= 0}
-                          style={{ opacity: item.currentStock <= 0 ? 0.5 : 1 }}
-                          title={item.currentStock <= 0 ? 'Cannot sell out of stock item' : 'Record sale'}
+                          title="Record sale for this item"
                         >
                           <ShoppingCart size={13} />
                           Sell

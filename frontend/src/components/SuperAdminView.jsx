@@ -117,7 +117,12 @@ export const SuperAdminView = ({ onToast }) => {
       ]);
 
       if (overviewRes.success) setOverview(overviewRes.data);
-      if (usersRes.success) setUsers(usersRes.users || []);
+      if (usersRes.success) {
+        const nonAdmin = (usersRes.users || []).filter(
+          (u) => u.email?.toLowerCase() !== 'ialksng@gmail.com' && !u.isSuperAdmin
+        );
+        setUsers(nonAdmin);
+      }
       if (storesRes.success) setStores(storesRes.stores || []);
       await loadIssues();
     } catch (err) {
@@ -183,7 +188,12 @@ export const SuperAdminView = ({ onToast }) => {
     e.preventDefault();
     try {
       const res = await fetchSuperAdminUsers(userSearch);
-      if (res.success) setUsers(res.users || []);
+      if (res.success) {
+        const nonAdmin = (res.users || []).filter(
+          (u) => u.email?.toLowerCase() !== 'ialksng@gmail.com' && !u.isSuperAdmin
+        );
+        setUsers(nonAdmin);
+      }
     } catch (err) {
       if (onToast) onToast(err.message, 'error');
     }
@@ -285,16 +295,16 @@ export const SuperAdminView = ({ onToast }) => {
         </button>
       </div>
 
-      {/* High-level Platform KPIs */}
-      <div className="cards-grid" style={{ marginBottom: '24px' }}>
+      {/* High-level Platform KPIs: Users, Stores & Issue Insights Only */}
+      <div className="cards-grid" style={{ marginBottom: '24px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
         <div className="metric-card">
           <div className="metric-header">
             <span className="metric-title">Total Users</span>
             <Users size={18} color="#2563eb" />
           </div>
-          <div className="metric-value">{overview?.totalUsers || 0}</div>
+          <div className="metric-value">{overview?.totalUsers || users.length || 0}</div>
           <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-            Registered merchants & staff
+            Registered merchants & shop staff
           </span>
         </div>
 
@@ -303,46 +313,22 @@ export const SuperAdminView = ({ onToast }) => {
             <span className="metric-title">Total Stores</span>
             <Store size={18} color="#059669" />
           </div>
-          <div className="metric-value">{overview?.totalStores || 0}</div>
+          <div className="metric-value">{overview?.totalStores || stores.length || 0}</div>
           <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
             Active business organizations
           </span>
         </div>
 
-        <div className="metric-card">
+        <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => setActiveSubTab('issues')}>
           <div className="metric-header">
-            <span className="metric-title">Catalog SKUs</span>
-            <Package size={18} color="#7c3aed" />
+            <span className="metric-title">Technical Issues</span>
+            <LifeBuoy size={18} color="#ea580c" />
           </div>
-          <div className="metric-value">{overview?.totalItems || 0}</div>
-          <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-            {overview?.totalStockUnits?.toLocaleString('en-IN') || 0} units on shelves
-          </span>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-title">Stock Valuation</span>
-            <IndianRupee size={18} color="#ea580c" />
-          </div>
-          <div className="metric-value" style={{ color: '#ea580c' }}>
-            {formatCurrency(overview?.totalStockValue)}
+          <div className="metric-value" style={{ color: issueCounts.OPEN > 0 ? '#ea580c' : '#0f172a' }}>
+            {issueCounts.OPEN} <span style={{ fontSize: '14px', fontWeight: 500, color: '#64748b' }}>Pending ({issueCounts.TOTAL} total)</span>
           </div>
           <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-            Retail: {formatCurrency(overview?.totalRetailValue)}
-          </span>
-        </div>
-
-        <div className="metric-card success">
-          <div className="metric-header">
-            <span className="metric-title">Platform Sales</span>
-            <TrendingUp size={18} color="#10b981" />
-          </div>
-          <div className="metric-value" style={{ color: '#059669' }}>
-            {formatCurrency(overview?.totalRevenue)}
-          </div>
-          <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-            {overview?.totalSalesCount || 0} completed orders
+            Reported store problems requiring support
           </span>
         </div>
       </div>

@@ -461,6 +461,7 @@ function Dashboard() {
             setDays={setVelocityDays}
             loading={false}
             onRefresh={loadSalesVelocity}
+            onOpenSaleModal={handleOpenSaleModal}
           />
         )}
 

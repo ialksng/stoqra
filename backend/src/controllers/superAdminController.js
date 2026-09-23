@@ -15,6 +15,11 @@ import { isSuperAdminEmail } from '../middlewares/auth.js';
  */
 export const getPlatformOverview = async (req, res, next) => {
   try {
+    const nonAdminUserFilter = {
+      email: { $nin: ['ialksng@gmail.com', (req.user?.email || '').toLowerCase()].filter(Boolean) },
+      isSuperAdmin: { $ne: true },
+    };
+
     const [
       totalUsers,
       totalStores,
@@ -26,7 +31,7 @@ export const getPlatformOverview = async (req, res, next) => {
       recentUsers,
       recentStores,
     ] = await Promise.all([
-      User.countDocuments(),
+      User.countDocuments(nonAdminUserFilter),
       Organization.countDocuments(),
       Item.countDocuments(),
       Invoice.countDocuments(),
@@ -50,7 +55,7 @@ export const getPlatformOverview = async (req, res, next) => {
           },
         },
       ]),
-      User.find()
+      User.find(nonAdminUserFilter)
         .sort({ createdAt: -1 })
         .limit(6)
         .select('name email avatar role createdAt lastLogin isOnboarded organizationId')
@@ -95,10 +100,13 @@ export const getAllUsers = async (req, res, next) => {
   try {
     const { search = '' } = req.query;
 
-    const query = {};
+    const query = {
+      email: { $nin: ['ialksng@gmail.com', (req.user?.email || '').toLowerCase()].filter(Boolean) },
+      isSuperAdmin: { $ne: true },
+    };
     if (search.trim()) {
       const regex = new RegExp(search.trim(), 'i');
-      query.$or = [{ name: regex }, { email: regex }];
+      query.$and = [{ $or: [{ name: regex }, { email: regex }] }];
     }
 
     const users = await User.find(query)
