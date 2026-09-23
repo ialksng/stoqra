@@ -51,18 +51,32 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-// Health check endpoints (root and subpath)
+// Health & Keep-Awake Endpoints (ultra-lightweight, 0ms, no DB overhead)
 const healthHandler = (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
+    uptime: Math.floor(process.uptime()),
     subpath: '/projects/stoqra',
   });
 };
 
-app.get('/health', healthHandler);
-app.get('/projects/stoqra/health', healthHandler);
+const pingHandler = (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.status(200).send('pong');
+};
+
+// Support GET and HEAD for UptimeRobot, Cron-job.org, BetterStack, and internal pinger
+app.all(['/health', '/projects/stoqra/health'], (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD') return healthHandler(req, res);
+  next();
+});
+
+app.all(['/ping', '/projects/stoqra/ping', '/api/ping', '/projects/stoqra/api/ping'], (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD') return pingHandler(req, res);
+  next();
+});
 
 // API Routes mounted on both /api and /projects/stoqra/api
 // This ensures full compatibility whether a reverse proxy strips the subpath or forwards it

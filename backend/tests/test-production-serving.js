@@ -28,6 +28,17 @@ const runProductionServingTest = async () => {
     }
     console.log('✅ GET /projects/stoqra/health returned 200 OK\n');
 
+    // 2b. Test /ping & /projects/stoqra/ping (Uptime keep-awake)
+    console.log('Test 2b: GET /ping and /projects/stoqra/ping');
+    const pingRes = await fetch(`${baseUrl}/ping`);
+    const pingText = await pingRes.text();
+    const subPingRes = await fetch(`${baseUrl}/projects/stoqra/ping`);
+    const subPingText = await subPingRes.text();
+    if (pingRes.status !== 200 || pingText !== 'pong' || subPingRes.status !== 200 || subPingText !== 'pong') {
+      throw new Error(`Ping check failed: ${pingText}, ${subPingText}`);
+    }
+    console.log('✅ GET /ping and /projects/stoqra/ping returned 200 pong\n');
+
     // 3. Test /projects/stoqra SPA entry
     console.log('Test 3: GET /projects/stoqra (Frontend SPA)');
     const spaRes = await fetch(`${baseUrl}/projects/stoqra`);
