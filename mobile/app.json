@@ -37,17 +37,6 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": [
-      "expo-router",
-      [
-        "react-native-webview",
-        {
-          "android": {
-            "allowsInlineMediaPlayback": true
-          }
-        }
-      ]
-    ],
-    "scheme": "stoqra"
+    "plugins": []
   }
 }
