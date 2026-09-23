@@ -685,23 +685,35 @@ export const posCheckoutController = async (req, res, next) => {
       }
       await itemDoc.save();
 
-      // Record transaction ledger entry
+      // Map paymentMethod for transaction ledger enum ('UPI', 'CASH', 'CARD', 'BANK_TRANSFER', 'CREDIT', 'OTHER')
+      let txPaymentMode = 'UPI';
+      if (paymentMethod === 'CASH') txPaymentMode = 'CASH';
+      else if (paymentMethod === 'CARD') txPaymentMode = 'CARD';
+      else if (paymentMethod === 'CREDIT_UDHAR') txPaymentMode = 'CREDIT';
+      else if (paymentMethod === 'SPLIT') txPaymentMode = 'OTHER';
+
+      const targetOrgId = organizationId || itemDoc.organizationId;
+
+      // Record transaction ledger entry with correct schema keys
       await InventoryTransaction.create({
-        organizationId,
+        organizationId: targetOrgId,
         itemId: itemDoc._id,
         type: 'SALE',
-        quantity: -qty,
-        balanceAfter: itemDoc.currentStock,
+        quantityDelta: -qty,
         unitPrice: unitSellingPrice,
-        totalValue: subtotal,
-        reference: `POS Sale (${paymentMethod})`,
-        notes: customerNote,
+        sourceReference: `POS Sale (${paymentMethod})`,
+        paymentMode: txPaymentMode,
+        paymentAmount: subtotal,
+        customerName: customerNote ? customerNote.trim() : null,
+        notes: customerNote ? customerNote.trim() : `POS Sale via ${paymentMethod}`,
+        category: itemDoc.category || 'General',
+        supplier: itemDoc.supplier || null,
       });
 
       saleItems.push({
         itemId: itemDoc._id,
         name: itemDoc.name,
-        sku: itemDoc.sku,
+        sku: itemDoc.sku || '',
         quantity: qty,
         unitCostPrice,
         unitSellingPrice,
@@ -709,15 +721,17 @@ export const posCheckoutController = async (req, res, next) => {
       });
     }
 
+    const resolvedOrgId = organizationId || (saleItems.length > 0 ? (await Item.findById(saleItems[0].itemId))?.organizationId : null);
+
     // Record complete Sale
     const sale = await Sale.create({
-      organizationId,
+      organizationId: resolvedOrgId,
       items: saleItems,
       totalAmount,
       totalProfit,
       paymentMethod,
-      paymentSplits,
-      customerNote,
+      paymentSplits: paymentSplits || [],
+      customerNote: customerNote || '',
     });
 
     return res.status(201).json({

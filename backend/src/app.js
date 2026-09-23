@@ -183,7 +183,7 @@ app.use((err, req, res, next) => {
     const messages = Object.values(err.errors).map((e) => e.message);
     return res.status(400).json({
       success: false,
-      error: 'Database Validation Error',
+      error: messages.length > 0 ? messages.join('. ') : 'Database Validation Error',
       details: messages,
     });
   }
