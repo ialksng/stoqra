@@ -101,7 +101,7 @@ export const invoiceExtractionSchema = {
  */
 const getModelQueue = () => {
   let customModel = (process.env.GEMINI_MODEL || '').trim();
-  if (customModel && (/^gemini-(1\.5|2\.0)/i.test(customModel) || !/^gemini-(2\.5|3\.[0-9])/i.test(customModel))) {
+  if (customModel && (/^gemini-(1\.5|2\.0|2\.5-pro)/i.test(customModel) || !/^gemini-(2\.5|3\.[0-9])/i.test(customModel))) {
     customModel = 'gemini-3.5-flash-lite';
   }
 
@@ -109,8 +109,8 @@ const getModelQueue = () => {
     customModel || null,
     'gemini-3.5-flash-lite',
     'gemini-3.5-flash',
+    'gemini-3.1-pro-preview',
     'gemini-2.5-flash',
-    'gemini-2.5-pro',
   ].filter(Boolean);
 
   return [...new Set(models)];
@@ -125,7 +125,7 @@ const delay = (ms) =>
 /**
  * Promise timeout helper
  */
-const withTimeout = (promise, ms = 25000) => {
+const withTimeout = (promise, ms = 45000) => {
   return Promise.race([
     promise,
 
@@ -195,7 +195,7 @@ Analyze this PDF carefully.
 1. Determine whether the document is:
    - a commercial purchase invoice
    - sales bill
-   - receipt
+   - store receipt
    - GST tax invoice
 
 2. If it is NOT an invoice, such as:
@@ -203,6 +203,8 @@ Analyze this PDF carefully.
    - internship letter
    - certificate
    - resume
+   - stock trade confirmation / trading statement / demat details
+   - bank account statement / transaction advice / payment transfer slip
    - academic article
    - report
    - general reading document
