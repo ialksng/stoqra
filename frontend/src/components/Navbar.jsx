@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Plus,
   ShieldAlert,
+  LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -31,6 +32,87 @@ export const Navbar = ({
   const { user, logout } = useAuth();
   const isSuperAdmin = user?.isSuperAdmin || user?.email?.toLowerCase() === 'ialksng@gmail.com';
 
+  // ─── Super Admin Navbar (Clean & Dedicated Platform Oversight) ───────────────
+  if (isSuperAdmin) {
+    return (
+      <header className="navbar" style={{ padding: '12px 24px' }}>
+        <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <a
+            href="/projects/stoqra/"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'inherit' }}
+            title="Stoqra Platform Command Center"
+          >
+            <img
+              src="/projects/stoqra/stoqra-icon.png"
+              alt="Stoqra Logo"
+              style={{ width: '28px', height: '28px', objectFit: 'contain' }}
+            />
+            <span style={{ fontSize: '18px', fontWeight: '800', letterSpacing: '-0.02em', color: '#0f172a' }}>
+              Stoqra
+            </span>
+          </a>
+
+          <span style={{ width: '1px', height: '20px', backgroundColor: 'var(--border)' }}></span>
+
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: '800',
+              backgroundColor: '#fff7ed',
+              color: '#ea580c',
+              border: '1px solid #fed7aa',
+              padding: '3px 8px',
+              borderRadius: '6px',
+              letterSpacing: '0.4px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <ShieldAlert size={13} />
+            SUPER ADMIN COMMAND CENTER
+          </span>
+        </div>
+
+        <div className="nav-actions">
+          {user && (
+            <div className="user-profile-menu">
+              <div className="user-chip" title={user.email}>
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name || 'Admin'}
+                    className="user-avatar"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="user-avatar-placeholder">
+                    <UserIcon size={14} />
+                  </div>
+                )}
+                <div className="user-meta">
+                  <span className="user-name">{user.name || user.email}</span>
+                  <span style={{ fontSize: '9px', fontWeight: '800', color: '#ea580c' }}>
+                    PLATFORM ROOT
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={logout}
+                className="btn-icon-logout"
+                title="Sign out of Super Admin"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+    );
+  }
+
+  // ─── Merchant / Store Navbar ────────────────────────────────────────────────
   return (
     <header className="navbar">
       <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -163,6 +245,17 @@ export const Navbar = ({
         <button className="btn btn-secondary" onClick={onOpenUpload}>
           <UploadCloud size={16} />
           Upload Bill
+        </button>
+
+        {/* Report Technical Issue Portal Button */}
+        <button
+          className="btn btn-secondary"
+          onClick={() => onNavigateTab && onNavigateTab('support')}
+          title="Report technical issues or get help"
+          style={{ borderColor: activeTab === 'support' ? '#2563eb' : undefined }}
+        >
+          <LifeBuoy size={16} color="#2563eb" />
+          <span>Support / Issue</span>
         </button>
 
         {onExportReport && (

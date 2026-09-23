@@ -18,6 +18,10 @@ import {
   TrendingUp,
   Clock,
   Trash2,
+  LifeBuoy,
+  MessageSquare,
+  Edit3,
+  Send,
 } from 'lucide-react';
 import {
   fetchSuperAdminOverview,
@@ -26,14 +30,28 @@ import {
   fetchSuperAdminStoreCatalog,
   deleteSuperAdminUser,
   deleteSuperAdminStore,
+  fetchSuperAdminIssues,
+  updateSuperAdminIssue,
+  deleteSuperAdminIssue,
 } from '../services/api.js';
 
 export const SuperAdminView = ({ onToast }) => {
-  const [activeSubTab, setActiveSubTab] = useState('users'); // 'users' | 'stores'
+  const [activeSubTab, setActiveSubTab] = useState('users'); // 'users' | 'stores' | 'issues'
   const [overview, setOverview] = useState(null);
   const [users, setUsers] = useState([]);
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Issues State
+  const [issues, setIssues] = useState([]);
+  const [issueCounts, setIssueCounts] = useState({ TOTAL: 0, OPEN: 0, IN_PROGRESS: 0, RESOLVED: 0 });
+  const [issueStatusFilter, setIssueStatusFilter] = useState('ALL');
+  const [issuePriorityFilter, setIssuePriorityFilter] = useState('ALL');
+  const [issueSearch, setIssueSearch] = useState('');
+  const [loadingIssues, setLoadingIssues] = useState(false);
+  const [noteModalIssue, setNoteModalIssue] = useState(null); // { id, title, adminNotes }
+  const [noteInput, setNoteInput] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
 
   // Search filters
   const [userSearch, setUserSearch] = useState('');
@@ -70,6 +88,25 @@ export const SuperAdminView = ({ onToast }) => {
     }
   };
 
+  const loadIssues = async () => {
+    setLoadingIssues(true);
+    try {
+      const res = await fetchSuperAdminIssues({
+        status: issueStatusFilter,
+        priority: issuePriorityFilter,
+        search: issueSearch,
+      });
+      if (res.success) {
+        setIssues(res.issues || []);
+        if (res.counts) setIssueCounts(res.counts);
+      }
+    } catch (err) {
+      console.error('[SuperAdminView] Failed to load issues:', err);
+    } finally {
+      setLoadingIssues(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -82,6 +119,7 @@ export const SuperAdminView = ({ onToast }) => {
       if (overviewRes.success) setOverview(overviewRes.data);
       if (usersRes.success) setUsers(usersRes.users || []);
       if (storesRes.success) setStores(storesRes.stores || []);
+      await loadIssues();
     } catch (err) {
       console.error('[SuperAdminView] Failed to load data:', err);
       if (onToast) onToast(err.message || 'Failed to fetch platform metrics', 'error');
@@ -93,6 +131,53 @@ export const SuperAdminView = ({ onToast }) => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    loadIssues();
+  }, [issueStatusFilter, issuePriorityFilter]);
+
+  const handleUpdateIssueStatus = async (issueId, newStatus) => {
+    try {
+      const res = await updateSuperAdminIssue(issueId, { status: newStatus });
+      if (res.success) {
+        if (onToast) onToast(`Issue status updated to ${newStatus}`, 'success');
+        loadIssues();
+      }
+    } catch (err) {
+      if (onToast) onToast(err.message || 'Failed to update issue status', 'error');
+    }
+  };
+
+  const handleSaveNote = async () => {
+    if (!noteModalIssue) return;
+    setSavingNote(true);
+    try {
+      const res = await updateSuperAdminIssue(noteModalIssue._id, { adminNotes: noteInput });
+      if (res.success) {
+        if (onToast) onToast('Admin resolution note saved and visible to merchant', 'success');
+        setNoteModalIssue(null);
+        setNoteInput('');
+        loadIssues();
+      }
+    } catch (err) {
+      if (onToast) onToast(err.message || 'Failed to save admin note', 'error');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleDeleteIssue = async (issueId) => {
+    if (!window.confirm('Delete this issue ticket permanently?')) return;
+    try {
+      const res = await deleteSuperAdminIssue(issueId);
+      if (res.success) {
+        if (onToast) onToast('Issue ticket deleted', 'success');
+        loadIssues();
+      }
+    } catch (err) {
+      if (onToast) onToast(err.message || 'Failed to delete issue ticket', 'error');
+    }
+  };
 
   const handleSearchUsers = async (e) => {
     e.preventDefault();
@@ -269,6 +354,9 @@ export const SuperAdminView = ({ onToast }) => {
           gap: '8px',
           borderBottom: '1px solid #e2e8f0',
           marginBottom: '20px',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
         }}
       >
         <button
@@ -285,6 +373,7 @@ export const SuperAdminView = ({ onToast }) => {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
+            whiteSpace: 'nowrap',
           }}
         >
           <Users size={16} />
@@ -305,10 +394,32 @@ export const SuperAdminView = ({ onToast }) => {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
+            whiteSpace: 'nowrap',
           }}
         >
           <Store size={16} />
           Stores & Organizations ({stores.length})
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('issues')}
+          style={{
+            padding: '10px 16px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            border: 'none',
+            background: 'none',
+            color: activeSubTab === 'issues' ? '#ea580c' : '#64748b',
+            borderBottom: activeSubTab === 'issues' ? '2px solid #ea580c' : '2px solid transparent',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <LifeBuoy size={16} />
+          Technical Issues & Reports ({issueCounts.OPEN > 0 ? `${issueCounts.OPEN} Pending` : issueCounts.TOTAL})
         </button>
       </div>
 
@@ -708,6 +819,354 @@ export const SuperAdminView = ({ onToast }) => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Technical Issues & Reports Portal */}
+      {activeSubTab === 'issues' && (
+        <div className="superadmin-section">
+          {/* Top Filter and Search Bar */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px',
+              marginBottom: '16px',
+            }}
+          >
+            {/* Status Pills */}
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '4px' }}>
+              {[
+                { id: 'ALL', label: `All Tickets (${issueCounts.TOTAL})` },
+                { id: 'OPEN', label: `Pending (${issueCounts.OPEN})` },
+                { id: 'IN_PROGRESS', label: `In Progress (${issueCounts.IN_PROGRESS})` },
+                { id: 'RESOLVED', label: `Resolved (${issueCounts.RESOLVED})` },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={() => setIssueStatusFilter(pill.id)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    border: '1px solid',
+                    whiteSpace: 'nowrap',
+                    backgroundColor: issueStatusFilter === pill.id ? '#ea580c' : '#ffffff',
+                    color: issueStatusFilter === pill.id ? '#ffffff' : '#475569',
+                    borderColor: issueStatusFilter === pill.id ? '#ea580c' : '#cbd5e1',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Priority filter and Search */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <select
+                className="form-control"
+                value={issuePriorityFilter}
+                onChange={(e) => setIssuePriorityFilter(e.target.value)}
+                style={{ width: 'auto', padding: '6px 10px', fontSize: '12px', borderRadius: '8px' }}
+              >
+                <option value="ALL">All Severities</option>
+                <option value="CRITICAL">Critical Priority</option>
+                <option value="HIGH">High Priority</option>
+                <option value="MEDIUM">Medium Priority</option>
+                <option value="LOW">Low Priority</option>
+              </select>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  loadIssues();
+                }}
+                style={{ display: 'flex', gap: '6px' }}
+              >
+                <input
+                  type="text"
+                  placeholder="Search issue or shop..."
+                  value={issueSearch}
+                  onChange={(e) => setIssueSearch(e.target.value)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '12px',
+                  }}
+                />
+                <button type="submit" className="btn btn-secondary btn-sm" style={{ padding: '6px 10px' }}>
+                  Search
+                </button>
+              </form>
+
+              <button
+                type="button"
+                onClick={loadIssues}
+                className="btn btn-secondary btn-sm"
+                title="Refresh tickets"
+              >
+                <RotateCw size={13} className={loadingIssues ? 'spin' : ''} />
+              </button>
+            </div>
+          </div>
+
+          {/* Issues Table */}
+          <div className="table-responsive" style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflowX: 'auto' }}>
+            <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                  <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Status</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Severity</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Shop & Merchant</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Issue Subject & Details</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Category</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Reported On</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingIssues ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                      <RotateCw size={20} className="spin" style={{ margin: '0 auto 8px auto' }} />
+                      Loading issue reports...
+                    </td>
+                  </tr>
+                ) : issues.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '40px 16px', color: '#64748b' }}>
+                      <CheckCircle2 size={36} color="#10b981" style={{ margin: '0 auto 8px auto', opacity: 0.8 }} />
+                      <div style={{ fontWeight: 600, color: '#0f172a' }}>No tickets matching this filter</div>
+                      <div style={{ fontSize: '12px', marginTop: '4px' }}>
+                        All merchant issues have been reviewed or resolved.
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  issues.map((iss) => (
+                    <tr key={iss._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '12px 16px' }}>
+                        {iss.status === 'OPEN' && (
+                          <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px', backgroundColor: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Clock size={12} /> Pending
+                          </span>
+                        )}
+                        {iss.status === 'IN_PROGRESS' && (
+                          <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px', backgroundColor: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <RotateCw size={12} className="spin" /> In Progress
+                          </span>
+                        )}
+                        {iss.status === 'RESOLVED' && (
+                          <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px', backgroundColor: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <CheckCircle2 size={12} /> Resolved
+                          </span>
+                        )}
+                        {iss.status === 'CLOSED' && (
+                          <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px', backgroundColor: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>
+                            Closed
+                          </span>
+                        )}
+                      </td>
+
+                      <td style={{ padding: '12px 16px' }}>
+                        {iss.priority === 'CRITICAL' && (
+                          <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626', backgroundColor: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>
+                            CRITICAL
+                          </span>
+                        )}
+                        {iss.priority === 'HIGH' && (
+                          <span style={{ fontSize: '10px', fontWeight: '800', color: '#ea580c', backgroundColor: '#ffedd5', padding: '2px 6px', borderRadius: '4px' }}>
+                            HIGH
+                          </span>
+                        )}
+                        {iss.priority === 'MEDIUM' && (
+                          <span style={{ fontSize: '10px', fontWeight: '700', color: '#2563eb', backgroundColor: '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>
+                            MEDIUM
+                          </span>
+                        )}
+                        {iss.priority === 'LOW' && (
+                          <span style={{ fontSize: '10px', fontWeight: '600', color: '#64748b', backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                            LOW
+                          </span>
+                        )}
+                      </td>
+
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: '700', color: '#0f172a' }}>
+                          {iss.organizationId?.name || 'Unassigned Store'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                          {iss.userId?.name || 'User'} ({iss.userId?.email || 'N/A'})
+                        </div>
+                      </td>
+
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{iss.title}</div>
+                        <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px', maxWidth: '340px', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                          {iss.description}
+                        </div>
+                        {iss.adminNotes && (
+                          <div style={{ fontSize: '11px', color: '#059669', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '4px 8px', marginTop: '6px' }}>
+                            <strong>Resolution Note:</strong> {iss.adminNotes}
+                          </div>
+                        )}
+                      </td>
+
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{ fontSize: '11px', color: '#334155', backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                          {iss.category}
+                        </span>
+                      </td>
+
+                      <td style={{ padding: '12px 16px', color: '#64748b', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                        {formatDate(iss.createdAt)}
+                      </td>
+
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {iss.status === 'OPEN' && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateIssueStatus(iss._id, 'IN_PROGRESS')}
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: '11px', padding: '4px 8px' }}
+                              title="Mark ticket Under Investigation"
+                            >
+                              Investigate
+                            </button>
+                          )}
+                          {iss.status !== 'RESOLVED' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateIssueStatus(iss._id, 'RESOLVED')}
+                              className="btn btn-sm"
+                              style={{ backgroundColor: '#dcfce7', color: '#15803d', border: '1px solid #86efac', fontSize: '11px', padding: '4px 8px', fontWeight: '600' }}
+                              title="Mark issue Resolved"
+                            >
+                              Resolve
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateIssueStatus(iss._id, 'OPEN')}
+                              className="btn btn-secondary btn-sm"
+                              style={{ fontSize: '11px', padding: '4px 8px' }}
+                              title="Reopen issue"
+                            >
+                              Re-open
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNoteModalIssue(iss);
+                              setNoteInput(iss.adminNotes || '');
+                            }}
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: '11px', padding: '4px 6px' }}
+                            title="Add resolution note for merchant"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteIssue(iss._id)}
+                            className="btn btn-sm"
+                            style={{ backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 6px' }}
+                            title="Delete issue record"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Resolution Note Modal */}
+      {noteModalIssue && (
+        <div className="modal-backdrop" style={{ zIndex: 10002 }}>
+          <div
+            className="modal-content modal-card"
+            style={{
+              maxWidth: '500px',
+              width: '95%',
+              padding: '24px',
+              borderRadius: '16px',
+              backgroundColor: '#ffffff',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#0f172a' }}>
+                Admin Resolution Note
+              </h3>
+              <button
+                type="button"
+                onClick={() => setNoteModalIssue(null)}
+                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px 0' }}>
+              Ticket: <strong>{noteModalIssue.title}</strong>
+              <br />
+              This resolution note will be displayed directly to the shop merchant in their Issue Portal.
+            </p>
+
+            <textarea
+              className="form-control"
+              rows={4}
+              placeholder="e.g. Fixed the OAuth token refresh issue. Please click 'Sync Gmail' again..."
+              value={noteInput}
+              onChange={(e) => setNoteInput(e.target.value)}
+              style={{ width: '100%', marginBottom: '16px', fontSize: '13px' }}
+              autoFocus
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setNoteModalIssue(null)}
+                disabled={savingNote}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveNote}
+                disabled={savingNote}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                {savingNote ? (
+                  <>
+                    <RotateCw size={14} className="spin" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} /> Save & Notify Merchant
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

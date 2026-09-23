@@ -114,7 +114,7 @@ export const AddItemModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           {/* Category & Supplier */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div className="form-grid-2">
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <label className="form-label" style={{ margin: 0 }}>Category</label>
@@ -189,7 +189,7 @@ export const AddItemModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           {/* Stock in Hand & Alert Threshold */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Stock in Hand (Quantity)</label>
               <input
@@ -221,7 +221,7 @@ export const AddItemModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           {/* Cost Price & Selling Price */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Cost / Purchase Price (₹)</label>
               <input

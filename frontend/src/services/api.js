@@ -507,6 +507,53 @@ export const deleteSuperAdminStore = async (orgId) => {
   return handleResponse(res);
 };
 
+// ─── Technical Issue & Support Portal ─────────────────────────────────────────
+
+export const reportIssue = async (issueData) => {
+  const res = await fetch(`${API_PREFIX}/issues`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(issueData),
+  });
+  return handleResponse(res);
+};
+
+export const fetchMyStoreIssues = async () => {
+  const res = await fetch(`${API_PREFIX}/issues/my-store`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const fetchSuperAdminIssues = async (filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.status) params.append('status', filters.status);
+  if (filters.priority) params.append('priority', filters.priority);
+  if (filters.search) params.append('search', filters.search);
+
+  const res = await fetch(`${API_PREFIX}/issues/admin/all?${params.toString()}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const updateSuperAdminIssue = async (issueId, updates) => {
+  const res = await fetch(`${API_PREFIX}/issues/admin/${issueId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(updates),
+  });
+  return handleResponse(res);
+};
+
+export const deleteSuperAdminIssue = async (issueId) => {
+  const res = await fetch(`${API_PREFIX}/issues/admin/${issueId}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
 export default {
   getStoredToken,
   setStoredToken,
@@ -534,6 +581,11 @@ export default {
   fetchSuperAdminStoreCatalog,
   deleteSuperAdminUser,
   deleteSuperAdminStore,
+  reportIssue,
+  fetchMyStoreIssues,
+  fetchSuperAdminIssues,
+  updateSuperAdminIssue,
+  deleteSuperAdminIssue,
 };
 
 

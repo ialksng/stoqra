@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2, Users, BarChart3, ShieldAlert } from 'lucide-react';
+import { Package, Activity, FileText, History, CheckCircle2, AlertCircle, Loader2, Users, BarChart3, ShieldAlert, LifeBuoy } from 'lucide-react';
 import Navbar from './components/Navbar.jsx';
 import MetricCards from './components/MetricCards.jsx';
 import InventoryTable from './components/InventoryTable.jsx';
@@ -9,6 +9,7 @@ import TransactionsView from './components/TransactionsView.jsx';
 import TeamView from './components/TeamView.jsx';
 import AnalyticsDashboardView from './components/AnalyticsDashboardView.jsx';
 import SuperAdminView from './components/SuperAdminView.jsx';
+import ShopIssuePortal from './components/ShopIssuePortal.jsx';
 import UploadInvoiceModal from './components/UploadInvoiceModal.jsx';
 import RecordSaleModal from './components/RecordSaleModal.jsx';
 import EditItemModal from './components/EditItemModal.jsx';
@@ -412,21 +413,17 @@ function Dashboard() {
               Team
             </button>
           )}
-          {(user?.isSuperAdmin || user?.email?.toLowerCase() === 'ialksng@gmail.com') && (
-            <button
-              className={`tab ${activeTab === 'superadmin' ? 'active' : ''}`}
-              onClick={() => setActiveTab('superadmin')}
-              style={{
-                color: activeTab === 'superadmin' ? '#ea580c' : '#c2410c',
-                borderBottomColor: activeTab === 'superadmin' ? '#ea580c' : 'transparent',
-                backgroundColor: activeTab === 'superadmin' ? '#fff7ed' : 'transparent',
-                borderRadius: '6px 6px 0 0',
-              }}
-            >
-              <ShieldAlert size={16} />
-              Platform Admin
-            </button>
-          )}
+          <button
+            className={`tab ${activeTab === 'support' ? 'active' : ''}`}
+            onClick={() => setActiveTab('support')}
+            style={{
+              color: activeTab === 'support' ? '#2563eb' : undefined,
+              borderBottomColor: activeTab === 'support' ? '#2563eb' : undefined,
+            }}
+          >
+            <LifeBuoy size={16} />
+            Support / Issues
+          </button>
         </nav>
 
         {/* Tab Views */}
@@ -453,8 +450,8 @@ function Dashboard() {
           <AnalyticsDashboardView />
         )}
 
-        {activeTab === 'superadmin' && (
-          <SuperAdminView onToast={addToast} />
+        {activeTab === 'support' && (
+          <ShopIssuePortal onToast={addToast} />
         )}
 
         {activeTab === 'velocity' && (
@@ -601,6 +598,36 @@ function Dashboard() {
   );
 }
 
+function SuperAdminApp() {
+  const [toasts, setToasts] = useState([]);
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
+  return (
+    <div className="app-container">
+      <Navbar />
+      <main className="main-content">
+        <SuperAdminView onToast={addToast} />
+      </main>
+
+      {/* Toast Notification Container */}
+      <div className="toast-container">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast ${toast.type}`}>
+            {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+            <span>{toast.message}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AppShell() {
   const { isAuthenticated, loading, isOnboarded, user, completeOrgSetup } = useAuth();
 
@@ -622,6 +649,12 @@ function AppShell() {
 
   if (!isAuthenticated) {
     return <LoginView />;
+  }
+
+  // Super Admin (ialksng@gmail.com) bypasses merchant store setup and gets dedicated Command Center
+  const isSuperAdmin = user?.isSuperAdmin || user?.email?.toLowerCase() === 'ialksng@gmail.com';
+  if (isSuperAdmin) {
+    return <SuperAdminApp />;
   }
 
   // Show store setup modal for new users who haven't set up their store yet

@@ -104,7 +104,7 @@ export const EditItemModal = ({ isOpen, onClose, item, onSuccess }) => {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Category</label>
               <input
@@ -128,7 +128,7 @@ export const EditItemModal = ({ isOpen, onClose, item, onSuccess }) => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Product SKU</label>
               <input
@@ -156,7 +156,7 @@ export const EditItemModal = ({ isOpen, onClose, item, onSuccess }) => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+          <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Unit Cost (₹)</label>
               <input

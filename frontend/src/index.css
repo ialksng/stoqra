@@ -827,6 +827,20 @@ body {
 
 /* ---------------- 100% Mobile Responsive Architecture ---------------- */
 
+/* Dual column forms that stack gracefully on mobile screens */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 560px) {
+  .form-grid-2 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+}
+
 /* Viewport and Layout Safeguards */
 html,
 body,
@@ -1040,6 +1054,35 @@ body,
     margin: 12px;
     padding: 24px 18px;
     max-width: 94vw;
+  }
+
+  /* Table search & filter bars on mobile */
+  .table-header,
+  .table-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .table-actions .search-input,
+  .table-header .search-input {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Floating Toast Container on Mobile */
+  .toast-container {
+    left: 14px !important;
+    right: 14px !important;
+    bottom: 14px !important;
+    align-items: stretch !important;
+  }
+
+  .toast {
+    max-width: 100% !important;
+    width: 100% !important;
+    font-size: 13px !important;
+    padding: 10px 14px !important;
   }
 }
 
