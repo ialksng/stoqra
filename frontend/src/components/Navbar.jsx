@@ -1,8 +1,8 @@
 import React from 'react';
-import { Package, Mail, UploadCloud, ShoppingCart, LogOut, User as UserIcon, FileSpreadsheet, RotateCw, PlusCircle } from 'lucide-react';
+import { Package, Mail, UploadCloud, ShoppingCart, LogOut, User as UserIcon, FileSpreadsheet, RotateCw, PlusCircle, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export const Navbar = ({ onOpenUpload, onOpenSale, onOpenAddItem, onOpenSyncModal, onExportReport }) => {
+export const Navbar = ({ onOpenUpload, onOpenSale, onOpenAddItem, onOpenSyncModal, onExportReport, onInstall }) => {
   const { user, logout } = useAuth();
 
   return (
@@ -14,6 +14,18 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onOpenAddItem, onOpenSyncModa
       </div>
 
       <div className="nav-actions">
+        {onInstall && (
+          <button
+            className="btn btn-primary"
+            onClick={onInstall}
+            style={{ backgroundColor: '#10b981', borderColor: '#059669' }}
+            title="Install Stoqra app on your device"
+          >
+            <Download size={16} />
+            <span>Install App</span>
+          </button>
+        )}
+
         <div className="sync-btn-group" style={{ display: 'inline-flex', gap: '3px' }}>
           <button
             className="btn btn-secondary"

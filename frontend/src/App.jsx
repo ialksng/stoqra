@@ -114,6 +114,31 @@ function Dashboard() {
     }, 4000);
   };
 
+  // PWA Install Prompt Listener
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      addToast('Stoqra app installed to your home screen!', 'success');
+    }
+    setDeferredPrompt(null);
+  };
+
   // Fetch Stock Health
   const loadStockHealth = useCallback(async () => {
     try {
@@ -215,6 +240,7 @@ function Dashboard() {
         onOpenUpload={() => setUploadModalOpen(true)}
         onOpenSale={handleOpenSaleModal}
         onOpenAddItem={() => setAddItemModalOpen(true)}
+        onInstall={deferredPrompt ? handleInstallClick : null}
         onOpenSyncModal={(force = false) => {
           setSyncForceRescan(force);
           setSyncModalOpen(true);

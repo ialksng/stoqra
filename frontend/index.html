@@ -5,8 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m7.5 4.27 9 5.15'/><path d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/><path d='m3.3 7 8.7 5 8.7-5'/><path d='M12 22V12'/></svg>" />
     <title>Stoqra | Automated Inventory & GST Management</title>
+
+    <!-- PWA & Mobile Web App Manifest -->
+    <link rel="manifest" href="/projects/stoqra/manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
+
+    <!-- iOS Safari PWA support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Stoqra" />
+    <link rel="apple-touch-icon" href="/projects/stoqra/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/projects/stoqra/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/projects/stoqra/icon-512.png" />
+
     <!-- Google Identity Services client library -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Service Worker Registration for PWA Installation -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/projects/stoqra/sw.js')
+            .then((reg) => console.log('[PWA] Service Worker active, scope:', reg.scope))
+            .catch((err) => console.warn('[PWA] Service Worker registration failed:', err));
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
