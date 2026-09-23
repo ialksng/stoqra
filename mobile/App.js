@@ -26,6 +26,14 @@ const INJECTED_JS = `
       document.head.appendChild(meta);
     }
 
+    // Prevent external popup escapes
+    window.open = function(url) {
+      if (url) {
+        window.location.href = url;
+      }
+      return window;
+    };
+
     // Prevent double-tap zoom on iOS
     let lastTouchEnd = 0;
     document.addEventListener('touchend', function(event) {
@@ -47,6 +55,14 @@ export default function App() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Safeguard: Never allow loading spinner to block screen indefinitely
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoading(false);
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Android hardware back button support
   useEffect(() => {
@@ -114,6 +130,7 @@ export default function App() {
             ref={webViewRef}
             source={{ uri: STOQRA_URL }}
             style={styles.webview}
+            originWhitelist={['*']}
             // Navigation
             onNavigationStateChange={(navState) => {
               setCanGoBack(navState.canGoBack);
@@ -121,8 +138,18 @@ export default function App() {
                 setHasError(false);
               }
             }}
-            // Loading states - only show initial spinner, never block OAuth redirects
+            onShouldStartLoadWithRequest={(request) => {
+              // Always load inside the WebView, never escape to external browser
+              return true;
+            }}
+            // Loading states - progress and safety
+            onLoad={() => setIsInitialLoading(false)}
             onLoadEnd={() => setIsInitialLoading(false)}
+            onLoadProgress={({ nativeEvent }) => {
+              if (nativeEvent.progress > 0.5) {
+                setIsInitialLoading(false);
+              }
+            }}
             onError={(syntheticEvent) => {
               const { nativeEvent } = syntheticEvent;
               // Don't show error screen on OAuth intermediate redirects
@@ -152,11 +179,12 @@ export default function App() {
             injectedJavaScript={INJECTED_JS}
             javaScriptEnabled={true}
             domStorageEnabled={true}
+            setSupportMultipleWindows={false}
+            javaScriptCanOpenWindowsAutomatically={false}
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
             sharedCookiesEnabled={true}
             thirdPartyCookiesEnabled={true}
-            javaScriptCanOpenWindowsAutomatically={true}
             // Allow file uploads (invoice PDFs)
             allowsProtectedMedia={true}
             // iOS specific

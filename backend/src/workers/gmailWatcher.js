@@ -349,9 +349,17 @@ export const syncGmailInvoices = async (options = {}) => {
               continue;
             }
 
-            if (!extractedInvoice || !extractedInvoice.items || extractedInvoice.items.length === 0) {
+            if (!extractedInvoice || extractedInvoice.isInvoice === false || !extractedInvoice.items || extractedInvoice.items.length === 0) {
               results.skipped += 1;
               syncProgress.skipped += 1;
+              syncProgress.logs.unshift({
+                type: 'info',
+                text: `"${filename}" is not an invoice (skipped).`,
+              });
+              await safeRecordProcessedMail(
+                { messageId, ...(organizationId && { organizationId }) },
+                { $set: { messageId, organizationId: organizationId || null, status: 'NOT_AN_INVOICE', reason: 'non_invoice_pdf' } }
+              );
               continue;
             }
 

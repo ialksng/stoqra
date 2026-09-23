@@ -7,6 +7,10 @@ import { ai, DEFAULT_GEMINI_MODEL } from '../config/gemini.js';
 export const invoiceExtractionSchema = {
   type: Type.OBJECT,
   properties: {
+    isInvoice: {
+      type: Type.BOOLEAN,
+      description: 'True if document is a purchase invoice, sales bill, receipt, or commercial tax invoice; False if document is an offer letter, certificate, resume, academic article, report, or non-invoice PDF',
+    },
     invoiceNumber: {
       type: Type.STRING,
       description: 'Unique invoice identifier or invoice number from the document',
@@ -50,20 +54,25 @@ export const invoiceExtractionSchema = {
       },
     },
   },
-  required: ['invoiceNumber', 'vendorName', 'totalAmount', 'items'],
+  required: ['isInvoice', 'invoiceNumber', 'vendorName', 'totalAmount', 'items'],
 };
 
 /**
  * Multi-model fallback list in order of preference
  */
 const getModelQueue = () => {
-  const customModel = (process.env.GEMINI_MODEL || '').trim();
-  const isValidCustom = customModel && /^gemini-(1\.5|2\.0|2\.5)-(flash|pro)/i.test(customModel);
+  let customModel = (process.env.GEMINI_MODEL || '').trim();
+  // Automatically alias legacy or deprecated 1.5 models to active 2.5-flash
+  if (customModel && (/^gemini-1\.5/i.test(customModel) || !/^gemini-(2\.0|2\.5)-(flash|pro)/i.test(customModel))) {
+    customModel = 'gemini-2.5-flash';
+  }
   const models = [
-    isValidCustom ? customModel : null,
+    customModel || null,
     'gemini-2.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
+    'gemini-2.0-flash-lite',
   ].filter(Boolean);
 
   return [...new Set(models)];
@@ -84,7 +93,7 @@ const withTimeout = (promise, ms = 25000) => {
  * Parse a PDF invoice buffer using Google GenAI (Gemini) structured output
  * Automatically retries with backoff and falls back across models on 503/429 spikes.
  * @param {Buffer} pdfBuffer - PDF file buffer
- * @returns {Promise<{ invoiceNumber: string, vendorName: string, totalAmount: number, items: Array<{ sku: string, name: string, quantity: number, unitCost: number, category: string }> }>}
+ * @returns {Promise<{ isInvoice: boolean, invoiceNumber: string, vendorName: string, totalAmount: number, items: Array<{ sku: string, name: string, quantity: number, unitCost: number, category: string }> }>}
  */
 export const parseInvoicePDF = async (pdfBuffer) => {
   if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
@@ -93,11 +102,15 @@ export const parseInvoicePDF = async (pdfBuffer) => {
 
   const base64Data = pdfBuffer.toString('base64');
   const prompt = `You are an automated invoice parsing engine specialized in commercial and Indian GST Tax Invoices.
-Extract all structured data from this PDF invoice with high accuracy:
-- invoiceNumber: Unique invoice or bill number (e.g. INV-10023, GST/24-25/001)
-- vendorName: Name of the supplier or business entity issuing the invoice
-- totalAmount: Final total payable invoice amount in Rupees/INR (including applicable CGST, SGST, IGST)
-- items: Extract every line item with its SKU (or HSN/SAC code / product code), clear item description, quantity delivered, unit cost, and a sensible product category (e.g. Electronics, Raw Materials, FMCG, Hardware, Apparel, Office Supplies, General).
+Analyze this document carefully:
+1. Determine if it is a commercial purchase invoice, bill, receipt, or tax invoice.
+2. If it is NOT an invoice (e.g. it is an offer letter, internship letter, certificate, resume, academic article, report, or general reading document), set isInvoice to false and items to [].
+3. If it IS a valid invoice:
+   - set isInvoice: true
+   - invoiceNumber: Unique invoice or bill number (e.g. INV-10023, GST/24-25/001)
+   - vendorName: Name of the supplier or business entity issuing the invoice
+   - totalAmount: Final total payable invoice amount in Rupees/INR (including applicable CGST, SGST, IGST)
+   - items: Extract every line item with its SKU (or HSN/SAC code / product code), clear item description, quantity delivered, unit cost, and a sensible product category (e.g. Electronics, Raw Materials, FMCG, Hardware, Apparel, Office Supplies, General).
 Ensure all amounts and quantities are positive numerical values without currency symbols.`;
 
   const modelsToTry = getModelQueue();
@@ -144,8 +157,20 @@ Ensure all amounts and quantities are positive numerical values without currency
 
         const parsed = JSON.parse(cleanJson);
 
+        if (parsed.isInvoice === false) {
+          console.log(`[InvoiceParser] Document classified as non-invoice by model "${modelName}".`);
+          return {
+            isInvoice: false,
+            invoiceNumber: '',
+            vendorName: '',
+            totalAmount: 0,
+            items: [],
+          };
+        }
+
         // Validate and sanitize data
         const sanitized = {
+          isInvoice: true,
           invoiceNumber: String(parsed.invoiceNumber || `INV-${Date.now()}`).trim(),
           vendorName: String(parsed.vendorName || 'Unknown Vendor').trim(),
           totalAmount: Number(parsed.totalAmount) || 0,
