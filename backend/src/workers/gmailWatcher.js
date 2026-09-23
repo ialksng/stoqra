@@ -15,6 +15,35 @@ let isSyncInProgress = false;
 let syncStartTime = null;
 
 /**
+ * Real-time sync progress state for UI polling
+ */
+export let syncProgress = {
+  inProgress: false,
+  forceRescan: false,
+  startedAt: null,
+  totalFound: 0,
+  currentIndex: 0,
+  currentFilename: null,
+  statusMessage: 'Ready to sync',
+  processed: 0,
+  skipped: 0,
+  errors: 0,
+  itemsImported: 0,
+  invoices: [],
+  logs: [],
+  lastResult: null,
+};
+
+export const getSyncProgress = () => {
+  return {
+    ...syncProgress,
+    elapsedSeconds: syncProgress.startedAt && syncProgress.inProgress
+      ? Math.floor((Date.now() - syncProgress.startedAt) / 1000)
+      : 0,
+  };
+};
+
+/**
  * Safely upsert a record into ProcessedMail without failing on legacy index errors
  */
 const safeRecordProcessedMail = async (filter, updateDoc) => {
@@ -36,9 +65,6 @@ const safeRecordProcessedMail = async (filter, updateDoc) => {
 
 /**
  * Recursively find all PDF attachment parts in a Gmail message payload
- * Supports standard attachments (attachmentId), embedded base64 data (body.data), and all PDF mime variants
- * @param {Object} payload - Gmail message payload
- * @returns {Array} List of PDF parts
  */
 const findPdfParts = (payload) => {
   const pdfParts = [];
@@ -78,14 +104,11 @@ const findPdfParts = (payload) => {
 
 /**
  * Resolve target organization ID for Gmail sync
- * @param {string|null} providedOrgId
- * @returns {Promise<string|null>}
  */
 const resolveOrganizationId = async (providedOrgId) => {
   if (providedOrgId) return String(providedOrgId);
 
   try {
-    // 1. Check admin user by email
     const adminEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_ALERT_EMAIL || '')
       .split(',')
       .map((e) => e.trim().toLowerCase())
@@ -98,7 +121,6 @@ const resolveOrganizationId = async (providedOrgId) => {
       }
     }
 
-    // 2. Fallback to any active organization in DB
     const firstOrg = await Organization.findOne().sort({ createdAt: 1 }).lean();
     if (firstOrg) {
       return firstOrg._id.toString();
@@ -111,12 +133,7 @@ const resolveOrganizationId = async (providedOrgId) => {
 };
 
 /**
- * Execute Gmail invoice ingestion sync
- * Syncs read & unread emails matching attachments and invoice queries
- * @param {Object} [options] - Sync configuration options
- * @param {boolean} [options.forceRescan] - Force re-evaluation of previously scanned emails
- * @param {string} [options.organizationId] - Scope ingested items to this organization
- * @returns {Promise<{ status?: string, processed: number, skipped: number, errors: number, totalEmailsFound: number, details: Array }>}
+ * Execute Gmail invoice ingestion sync with real-time status updates
  */
 export const syncGmailInvoices = async (options = {}) => {
   const forceRescan = options?.forceRescan === true;
@@ -127,16 +144,33 @@ export const syncGmailInvoices = async (options = {}) => {
       console.warn('[GmailWatcher] Stale sync lock (>90s) detected. Forcing lock release.');
       isSyncInProgress = false;
     } else {
-      console.log('[GmailWatcher] Sync already in progress, skipping concurrent trigger.');
-      return { status: 'in_progress', message: 'Sync already in progress' };
+      console.log('[GmailWatcher] Sync already in progress, returning active status.');
+      return { status: 'in_progress', message: 'Sync already in progress', progress: getSyncProgress() };
     }
   }
 
   isSyncInProgress = true;
   syncStartTime = Date.now();
 
+  // Reset progress state
+  syncProgress = {
+    inProgress: true,
+    forceRescan,
+    startedAt: Date.now(),
+    totalFound: 0,
+    currentIndex: 0,
+    currentFilename: null,
+    statusMessage: 'Connecting to Gmail API & scanning mailbox...',
+    processed: 0,
+    skipped: 0,
+    errors: 0,
+    itemsImported: 0,
+    invoices: [],
+    logs: [{ type: 'info', text: 'Started Gmail mailbox scan...' }],
+    lastResult: null,
+  };
+
   try {
-    // Drop any legacy single-field unique indexes
     await cleanupLegacyIndexes().catch(() => {});
     organizationId = await resolveOrganizationId(organizationId);
   } catch {
@@ -150,6 +184,8 @@ export const syncGmailInvoices = async (options = {}) => {
     skipped: 0,
     errors: 0,
     totalEmailsFound: 0,
+    itemsImported: 0,
+    invoices: [],
     details: [],
   };
 
@@ -159,10 +195,12 @@ export const syncGmailInvoices = async (options = {}) => {
     .filter(Boolean);
 
   if (refreshTokens.length === 0) {
-    const errorMsg = 'Missing Gmail OAuth credentials. Ensure GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN are set in .env';
+    const errorMsg = 'Missing Gmail OAuth credentials in .env';
     console.warn(`[GmailWatcher] Skipping poll: ${errorMsg}`);
     isSyncInProgress = false;
     syncStartTime = null;
+    syncProgress.inProgress = false;
+    syncProgress.statusMessage = errorMsg;
     return { status: 'skipped', reason: errorMsg };
   }
 
@@ -178,9 +216,8 @@ export const syncGmailInvoices = async (options = {}) => {
         continue;
       }
 
-      // 1. Clean cache if force rescan or purge transient errors for this organization
+      // 1. Clean cache if force rescan or purge transient errors
       if (forceRescan) {
-        console.log(`[GmailWatcher] Force rescan active: resetting processed mail cache for org=${organizationId}...`);
         await ProcessedMail.deleteMany(orgFilter).catch(() => {});
       } else {
         await ProcessedMail.deleteMany({
@@ -189,9 +226,9 @@ export const syncGmailInvoices = async (options = {}) => {
         }).catch(() => {});
       }
 
-      // Broad query: all emails (read, unread) with attachments or invoice keywords
+      // Query broad range of invoices
       const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment OR filename:pdf OR invoice OR bill OR purchase OR tax OR order OR receipt -in:trash -in:spam';
-      console.log(`[GmailWatcher] Executing query "${query}" (max 100)...`);
+      syncProgress.statusMessage = 'Searching mailbox for invoice attachments...';
 
       let listRes = await gmail.users.messages.list({
         userId: 'me',
@@ -201,9 +238,7 @@ export const syncGmailInvoices = async (options = {}) => {
 
       let messages = listRes.data.messages || [];
 
-      // Fallback: If 0 messages found with broad query, search entire inbox
       if (messages.length === 0) {
-        console.log('[GmailWatcher] Checking recent inbox emails as fallback...');
         listRes = await gmail.users.messages.list({
           userId: 'me',
           q: 'in:inbox -in:trash -in:spam',
@@ -213,12 +248,21 @@ export const syncGmailInvoices = async (options = {}) => {
       }
 
       results.totalEmailsFound = messages.length;
-      console.log(`[GmailWatcher] Found ${messages.length} matching message(s) in mailbox.`);
+      syncProgress.totalFound = messages.length;
+      syncProgress.logs.unshift({
+        type: 'info',
+        text: `Found ${messages.length} email(s) to inspect in mailbox.`,
+      });
 
+      let msgIndex = 0;
       for (const msgRef of messages) {
+        msgIndex += 1;
         const messageId = msgRef.id;
 
-        // 2. Org-scoped Deduplication Check
+        syncProgress.currentIndex = msgIndex;
+        syncProgress.statusMessage = `Checking email ${msgIndex} of ${messages.length}...`;
+
+        // Check if invoice already exists for this store
         const existingInvoice = await Invoice.findOne({ messageId, ...orgFilter });
 
         if (existingInvoice) {
@@ -228,8 +272,8 @@ export const syncGmailInvoices = async (options = {}) => {
             : 0;
 
           if (catalogCount > 0 && !forceRescan) {
-            console.log(`[GmailWatcher] Invoice #${existingInvoice.invoiceNumber} already in store catalog. Skipping duplicate.`);
             results.skipped += 1;
+            syncProgress.skipped += 1;
             results.details.push({
               messageId,
               invoiceNumber: existingInvoice.invoiceNumber,
@@ -238,13 +282,11 @@ export const syncGmailInvoices = async (options = {}) => {
             });
             continue;
           } else {
-            console.log(`[GmailWatcher] Stale or missing invoice #${existingInvoice.invoiceNumber} found for messageId ${messageId}. Re-ingesting...`);
             await Invoice.deleteOne({ _id: existingInvoice._id }).catch(() => {});
           }
         }
 
         try {
-          // 3. Fetch full message payload
           const msgRes = await gmail.users.messages.get({
             userId: 'me',
             id: messageId,
@@ -253,25 +295,24 @@ export const syncGmailInvoices = async (options = {}) => {
           const pdfParts = findPdfParts(msgRes.data.payload);
 
           if (pdfParts.length === 0) {
-            console.log(`[GmailWatcher] Message ${messageId} did not contain downloadable PDF attachments.`);
             await safeRecordProcessedMail(
               { messageId, ...(organizationId && { organizationId }) },
               { $set: { messageId, organizationId: organizationId || null, status: 'SKIPPED', reason: 'no_pdf_attachment' } }
             );
             results.skipped += 1;
+            syncProgress.skipped += 1;
             results.details.push({ messageId, status: 'skipped', reason: 'no_pdf_attachment' });
             continue;
           }
-
-          console.log(`[GmailWatcher] Found ${pdfParts.length} PDF attachment(s) in message ${messageId}...`);
 
           let messageHasValidInvoice = false;
           let hadParseError = false;
 
           for (const part of pdfParts) {
             const filename = part.filename || 'invoice.pdf';
+            syncProgress.currentFilename = filename;
+            syncProgress.statusMessage = `Analyzing "${filename}" with Gemini AI...`;
 
-            // 4. Download PDF attachment into memory buffer
             let pdfBuffer = null;
             if (part.body && part.body.data) {
               pdfBuffer = Buffer.from(part.body.data, 'base64url');
@@ -286,13 +327,8 @@ export const syncGmailInvoices = async (options = {}) => {
               }
             }
 
-            if (!pdfBuffer || pdfBuffer.length === 0) {
-              console.warn(`[GmailWatcher] Could not retrieve buffer for attachment "${filename}". Skipping.`);
-              continue;
-            }
+            if (!pdfBuffer || pdfBuffer.length === 0) continue;
 
-            // 5. Pass buffer to Gemini PDF extraction service
-            console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${filename}" (${pdfBuffer.length} bytes)...`);
             let extractedInvoice = null;
             let parseError = null;
 
@@ -301,65 +337,61 @@ export const syncGmailInvoices = async (options = {}) => {
             } catch (parseErr) {
               parseError = parseErr;
               hadParseError = true;
-              console.warn(`[GmailWatcher] Gemini parse error on "${filename}":`, parseErr.message);
             }
 
             if (parseError) {
               results.errors += 1;
-              results.details.push({
-                messageId,
-                filename,
-                status: 'error',
-                reason: parseError.message,
+              syncProgress.errors += 1;
+              syncProgress.logs.unshift({
+                type: 'error',
+                text: `Extraction error on "${filename}": ${parseError.message}`,
               });
               continue;
             }
 
-            // If PDF contains no inventory line items, safely skip
             if (!extractedInvoice || !extractedInvoice.items || extractedInvoice.items.length === 0) {
-              console.log(`[GmailWatcher] Attachment "${filename}" has no inventory line items. Skipping.`);
               results.skipped += 1;
-              results.details.push({
-                messageId,
-                filename,
-                status: 'skipped',
-                reason: 'no_inventory_items',
-              });
+              syncProgress.skipped += 1;
               continue;
             }
 
-            // 6. Ingest into stock database atomically
-            console.log(`[GmailWatcher] Ingesting parsed invoice "${extractedInvoice.invoiceNumber}" into stock ledger (org=${organizationId})...`);
+            // Ingest parsed invoice
+            syncProgress.statusMessage = `Restocking catalog from Invoice #${extractedInvoice.invoiceNumber}...`;
             const restockResult = await processRestock(extractedInvoice, messageId, organizationId);
 
             if (restockResult.skipped) {
-              console.log(`[GmailWatcher] Invoice "${extractedInvoice.invoiceNumber}" duplicate skipped: ${restockResult.reason}`);
               results.skipped += 1;
-              results.details.push({
-                messageId,
-                filename,
-                invoiceNumber: extractedInvoice.invoiceNumber,
-                status: 'skipped',
-                reason: restockResult.reason || 'duplicate_invoice',
-              });
+              syncProgress.skipped += 1;
               continue;
             }
 
             messageHasValidInvoice = true;
             results.processed += 1;
-            results.details.push({
-              messageId,
-              filename,
+            results.itemsImported += extractedInvoice.items.length;
+            results.invoices.push({
               invoiceNumber: extractedInvoice.invoiceNumber,
               vendor: extractedInvoice.vendorName,
+              totalAmount: extractedInvoice.totalAmount,
               itemsCount: extractedInvoice.items.length,
-              status: 'success',
-              restockResult,
+            });
+
+            syncProgress.processed += 1;
+            syncProgress.itemsImported += extractedInvoice.items.length;
+            syncProgress.invoices.unshift({
+              invoiceNumber: extractedInvoice.invoiceNumber,
+              vendor: extractedInvoice.vendorName,
+              totalAmount: extractedInvoice.totalAmount,
+              itemsCount: extractedInvoice.items.length,
+              filename,
+            });
+
+            syncProgress.logs.unshift({
+              type: 'success',
+              text: `✅ Imported Invoice #${extractedInvoice.invoiceNumber} from "${extractedInvoice.vendorName}" (${extractedInvoice.items.length} items, ₹${Number(extractedInvoice.totalAmount || 0).toLocaleString('en-IN')})`,
             });
           }
 
           if (messageHasValidInvoice) {
-            // Mark message as processed for this store
             await safeRecordProcessedMail(
               { messageId, ...(organizationId && { organizationId }) },
               {
@@ -372,21 +404,16 @@ export const syncGmailInvoices = async (options = {}) => {
               }
             );
 
-            // 7. Attempt to remove UNREAD label from email
             try {
               await gmail.users.messages.modify({
                 userId: 'me',
                 id: messageId,
-                requestBody: {
-                  removeLabelIds: ['UNREAD'],
-                },
+                requestBody: { removeLabelIds: ['UNREAD'] },
               });
-              console.log(`[GmailWatcher] Removed UNREAD label from message ${messageId}`);
             } catch {
-              // Non-fatal
+              // Ignore
             }
           } else if (hadParseError) {
-            console.log(`[GmailWatcher] Message ${messageId} had extraction errors. Leaving eligible for retry.`);
             await safeRecordProcessedMail(
               { messageId, ...(organizationId && { organizationId }) },
               {
@@ -412,38 +439,28 @@ export const syncGmailInvoices = async (options = {}) => {
             );
           }
         } catch (msgError) {
-          console.error(`[GmailWatcher] Error processing message ${messageId}:`, msgError.message);
+          results.errors += 1;
+          syncProgress.errors += 1;
           await safeRecordProcessedMail(
             { messageId, ...(organizationId && { organizationId }) },
             { $set: { messageId, organizationId: organizationId || null, status: 'ERROR', reason: msgError.message } }
           );
-          results.errors += 1;
-          results.details.push({
-            messageId,
-            status: 'error',
-            error: msgError.message,
-          });
         }
       }
     }
   } catch (error) {
     console.error('[GmailWatcher] Global sync cycle failure:', error.message);
     results.status = 'error';
-    if (error.message.includes('unauthorized_client')) {
-      results.error = 'OAuth Client Mismatch (unauthorized_client): GMAIL_REFRESH_TOKEN was created for a different Client ID than GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET. Re-generate your refresh token using your exact Client ID & Secret in OAuth Playground.';
-    } else if (error.message.includes('invalid_grant')) {
-      results.error = 'Token Expired/Revoked (invalid_grant): Please generate a fresh refresh token in Google OAuth Playground.';
-    } else {
-      results.error = error.message;
-    }
+    results.error = error.message;
+    syncProgress.logs.unshift({ type: 'error', text: `Sync failed: ${error.message}` });
   } finally {
     isSyncInProgress = false;
     syncStartTime = null;
+    syncProgress.inProgress = false;
+    syncProgress.statusMessage = `Completed. ${results.processed} invoice(s) imported, ${results.skipped} skipped.`;
+    syncProgress.lastResult = results;
   }
 
-  console.log(
-    `[GmailWatcher] Cycle finished. Processed: ${results.processed}, Skipped: ${results.skipped}, Errors: ${results.errors}`
-  );
   return results;
 };
 
@@ -485,4 +502,5 @@ export default {
   startGmailWatcher,
   stopGmailWatcher,
   syncGmailInvoices,
+  getSyncProgress,
 };

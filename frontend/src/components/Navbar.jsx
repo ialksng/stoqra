@@ -1,75 +1,9 @@
-import React, { useState } from 'react';
-import { Package, Mail, UploadCloud, ShoppingCart, Loader2, LogOut, User as UserIcon, FileSpreadsheet, RotateCw } from 'lucide-react';
-import { triggerGmailSync } from '../services/api.js';
+import React from 'react';
+import { Package, Mail, UploadCloud, ShoppingCart, LogOut, User as UserIcon, FileSpreadsheet, RotateCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete, onExportReport }) => {
-  const [syncing, setSyncing] = useState(false);
+export const Navbar = ({ onOpenUpload, onOpenSale, onOpenSyncModal, onExportReport }) => {
   const { user, logout } = useAuth();
-
-  const handleSyncGmail = async (forceRescan = false) => {
-    setSyncing(true);
-    try {
-      const res = await triggerGmailSync({ forceRescan });
-      const result = res.result || {};
-      const processed = result.processed ?? 0;
-      const skipped = result.skipped ?? 0;
-      const errorMsg = result.error || result.reason;
-      const details = result.details || [];
-      const totalFound = result.totalEmailsFound ?? (processed + skipped);
-
-      if (result.status === 'in_progress') {
-        if (onSyncComplete) {
-          onSyncComplete('Gmail sync is currently scanning your inbox in the background. Please wait a moment...', 'info');
-        }
-        return;
-      }
-
-      if (result.status === 'skipped') {
-        if (onSyncComplete) {
-          onSyncComplete(`Gmail sync: ${result.reason || 'Skipped'}`, 'warning');
-        }
-        return;
-      }
-
-      if (result.status === 'error' || (errorMsg && processed === 0 && skipped === 0)) {
-        if (onSyncComplete) onSyncComplete(`Gmail sync error: ${errorMsg}`, 'error');
-        return;
-      }
-
-      let msg = '';
-      if (processed > 0) {
-        msg = `Gmail sync complete: ${processed} new invoice(s) imported into catalog.`;
-        if (skipped > 0) {
-          msg += ` (${skipped} already up-to-date)`;
-        }
-      } else if (skipped > 0) {
-        const skipSummary = details
-          .filter((d) => d.status === 'skipped')
-          .map((d) => {
-            if (d.reason === 'no_inventory_items') return `"${d.filename || 'PDF'}" has no invoice line items`;
-            if (d.reason === 'already_exists' || d.reason === 'already_processed') return 'already in database';
-            if (d.reason && d.reason.includes('already exists in records')) {
-              return `${d.invoiceNumber ? `Invoice #${d.invoiceNumber} ` : ''}already ingested`;
-            }
-            if (d.reason === 'no_pdf_attachment') return 'no PDF attachment';
-            return d.reason;
-          })
-          .slice(0, 3)
-          .join(', ');
-
-        msg = `Checked ${totalFound} email(s) in Gmail — all invoices are already in your system (${skipSummary || `${skipped} skipped`}). If you deleted items, click the Re-scan icon to re-import.`;
-      } else {
-        msg = 'Gmail sync: No emails with PDF attachments found matching criteria. Make sure your emails have PDF invoices attached.';
-      }
-
-      if (onSyncComplete) onSyncComplete(msg, processed > 0 ? 'success' : 'info');
-    } catch (err) {
-      if (onSyncComplete) onSyncComplete(`Gmail sync error: ${err.message}`, 'error');
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   return (
     <header className="navbar">
@@ -83,21 +17,19 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete, onExportRepor
         <div className="sync-btn-group" style={{ display: 'inline-flex', gap: '3px' }}>
           <button
             className="btn btn-secondary"
-            onClick={() => handleSyncGmail(false)}
-            disabled={syncing}
-            title="Query Gmail for unread invoice PDFs and restock automatically"
+            onClick={() => onOpenSyncModal && onOpenSyncModal(false)}
+            title="Scan Gmail for invoice attachments with live progress"
           >
-            {syncing ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
-            {syncing ? 'Checking Gmail...' : 'Sync Gmail'}
+            <Mail size={16} />
+            <span>Sync Gmail</span>
           </button>
           <button
             className="btn btn-secondary"
-            onClick={() => handleSyncGmail(true)}
-            disabled={syncing}
+            onClick={() => onOpenSyncModal && onOpenSyncModal(true)}
             style={{ padding: '0 8px' }}
-            title="Deep Re-scan: Re-evaluate all emails in inbox and restore any missing invoices"
+            title="Deep Re-scan: Re-evaluate all emails in inbox with live progress"
           >
-            <RotateCw size={14} className={syncing ? 'animate-spin' : ''} />
+            <RotateCw size={14} />
           </button>
         </div>
 
@@ -138,15 +70,15 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete, onExportRepor
                   <UserIcon size={14} />
                 </div>
               )}
-              <div className="user-info">
+              <div className="user-meta">
                 <span className="user-name">{user.name || user.email}</span>
-                <span className={`user-role-badge ${user.role || 'staff'}`}>{user.role || 'staff'}</span>
+                <span className="user-role-badge">{user.role || 'STAFF'}</span>
               </div>
             </div>
 
             <button
-              className="btn btn-icon btn-logout"
               onClick={logout}
+              className="btn-icon-logout"
               title="Sign out of Stoqra"
             >
               <LogOut size={16} />

@@ -4,7 +4,7 @@ import Invoice from '../models/Invoice.js';
 import ProcessedMail from '../models/ProcessedMail.js';
 import { parseInvoicePDF } from '../services/invoiceParser.js';
 import { processRestock, recordSale, InventoryError } from '../services/inventoryService.js';
-import { syncGmailInvoices } from '../workers/gmailWatcher.js';
+import { syncGmailInvoices, getSyncProgress } from '../workers/gmailWatcher.js';
 
 /**
  * Upload and process a PDF invoice manually via multipart/form-data
@@ -210,12 +210,42 @@ export const triggerGmailSync = async (req, res, next) => {
     const forceRescan = req.body?.forceRescan === true || req.query?.force === 'true';
     const organizationId = req.user?.organizationId;
     console.log(`[InventoryController] Manual trigger received for Gmail sync (forceRescan=${forceRescan}, org=${organizationId})...`);
-    const result = await syncGmailInvoices({ forceRescan, organizationId });
+
+    // Launch sync process (runs asynchronously if already running or starts new cycle)
+    const resultPromise = syncGmailInvoices({ forceRescan, organizationId });
+
+    // If caller requests instant background execution
+    if (req.query?.async === 'true') {
+      return res.status(200).json({
+        success: true,
+        message: 'Gmail ingestion worker started in background.',
+        progress: getSyncProgress(),
+      });
+    }
+
+    const result = await resultPromise;
 
     return res.status(200).json({
       success: true,
       message: 'Gmail ingestion worker execution finished.',
       result,
+      progress: getSyncProgress(),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get real-time Gmail sync progress status
+ * GET /api/worker/sync-status
+ */
+export const getGmailSyncStatus = async (req, res, next) => {
+  try {
+    const progress = getSyncProgress();
+    return res.status(200).json({
+      success: true,
+      progress,
     });
   } catch (error) {
     next(error);

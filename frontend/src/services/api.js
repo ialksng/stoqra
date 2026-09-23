@@ -310,6 +310,15 @@ export const triggerGmailSync = async (options = {}) => {
   return handleResponse(res);
 };
 
+export const getGmailSyncStatus = async () => {
+  const res = await fetch(`${API_PREFIX}/worker/sync-status`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
 // ─── Organization API ─────────────────────────────────────────────────────────
 
 export const getStoreTypes = async () => {

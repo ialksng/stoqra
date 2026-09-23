@@ -8,6 +8,7 @@ import {
   getTransactions,
   getInvoices,
   triggerGmailSync,
+  getGmailSyncStatus,
   updateItem,
   deleteItem,
   deleteInvoice,
@@ -103,5 +104,8 @@ router.post('/inventory/reset', requireAuth, resetDatabase);
 
 // 10. Manual trigger for Gmail background worker polling
 router.post('/worker/sync-gmail', requireAuth, triggerGmailSync);
+
+// 11. Real-time sync progress status
+router.get('/worker/sync-status', requireAuth, getGmailSyncStatus);
 
 export default router;

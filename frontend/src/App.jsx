@@ -13,6 +13,7 @@ import RecordSaleModal from './components/RecordSaleModal.jsx';
 import EditItemModal from './components/EditItemModal.jsx';
 import DeleteConfirmModal from './components/DeleteConfirmModal.jsx';
 import StoreSetupModal from './components/StoreSetupModal.jsx';
+import GmailSyncModal from './components/GmailSyncModal.jsx';
 import LoginView from './components/LoginView.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import {
@@ -52,6 +53,8 @@ function Dashboard() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   // Modals
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncForceRescan, setSyncForceRescan] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [selectedSaleItem, setSelectedSaleItem] = useState(null);
@@ -209,6 +212,10 @@ function Dashboard() {
       <Navbar
         onOpenUpload={() => setUploadModalOpen(true)}
         onOpenSale={handleOpenSaleModal}
+        onOpenSyncModal={(force = false) => {
+          setSyncForceRescan(force);
+          setSyncModalOpen(true);
+        }}
         onExportReport={() => {
           if (items.length === 0 && invoices.length === 0 && transactions.length === 0) {
             addToast('No data available to export yet. Restock items first.', 'info');
@@ -222,10 +229,6 @@ function Dashboard() {
             days: velocityDays,
           });
           addToast('Complete business report downloaded as Excel (.xlsx)!', 'success');
-        }}
-        onSyncComplete={(msg, type) => {
-          addToast(msg, type);
-          refreshAllData();
         }}
       />
 
@@ -386,6 +389,19 @@ function Dashboard() {
         itemLabel={deleteConfig.itemLabel}
         onConfirm={deleteConfig.onConfirm}
         onClose={() => setDeleteModalOpen(false)}
+      />
+
+      {/* Live Gmail Sync Progress Modal */}
+      <GmailSyncModal
+        isOpen={syncModalOpen}
+        onClose={() => {
+          setSyncModalOpen(false);
+          refreshAllData();
+        }}
+        forceRescan={syncForceRescan}
+        onSyncFinished={() => {
+          refreshAllData();
+        }}
       />
 
       {/* Toast Notification Container */}
