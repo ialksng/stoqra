@@ -61,9 +61,10 @@ export const runInTransaction = async (workFn) => {
  * Process inbound restock from parsed invoice data
  * @param {Object} invoiceData - Parsed invoice object
  * @param {string} [messageId] - Optional Gmail message ID for deduplication
+ * @param {string} [organizationId] - Organization to scope this restock to
  * @returns {Promise<{ invoice: Object, itemsProcessed: Array }>}
  */
-export const processRestock = async (invoiceData, messageId = null) => {
+export const processRestock = async (invoiceData, messageId = null, organizationId = null) => {
   if (!invoiceData || !invoiceData.invoiceNumber) {
     throw new InventoryError('Invalid invoice data: missing invoiceNumber', 400);
   }
@@ -76,22 +77,23 @@ export const processRestock = async (invoiceData, messageId = null) => {
     throw new InventoryError('No valid line items found in the invoice document.', 400);
   }
 
+  // Build org filter for all queries
+  const orgFilter = organizationId ? { organizationId } : {};
+
   return await runInTransaction(async (session) => {
     const sessionOption = session ? { session } : {};
 
     // 1. Deduplication check: by messageId (if Gmail)
     if (messageId) {
-      const existingInvoice = await Invoice.findOne({ messageId }).setOptions(sessionOption);
+      const existingInvoice = await Invoice.findOne({ messageId, ...orgFilter }).setOptions(sessionOption);
       if (existingInvoice) {
         const itemSkus = (existingInvoice.items || []).map((i) => i.sku).filter(Boolean);
-        const catalogCount = itemSkus.length > 0 ? await Item.countDocuments({ sku: { $in: itemSkus } }).setOptions(sessionOption) : 0;
+        const catalogCount = itemSkus.length > 0
+          ? await Item.countDocuments({ sku: { $in: itemSkus }, ...orgFilter }).setOptions(sessionOption)
+          : 0;
         if (catalogCount > 0) {
           console.log(`[InventoryService] Invoice with messageId ${messageId} already processed and catalog items present. Skipping.`);
-          return {
-            invoice: existingInvoice,
-            skipped: true,
-            reason: 'Duplicate Gmail messageId',
-          };
+          return { invoice: existingInvoice, skipped: true, reason: 'Duplicate Gmail messageId' };
         } else {
           console.log(`[InventoryService] Invoice messageId ${messageId} found but catalog items were removed. Replacing invoice and restocking items.`);
           await Invoice.deleteOne({ _id: existingInvoice._id }).setOptions(sessionOption);
@@ -99,23 +101,22 @@ export const processRestock = async (invoiceData, messageId = null) => {
       }
     }
 
-    // 2. Deduplication check: by invoiceNumber (case-insensitive)
+    // 2. Deduplication check: by invoiceNumber (case-insensitive, per org)
     const trimmedInvoiceNumber = (invoiceData.invoiceNumber || '').trim();
     if (trimmedInvoiceNumber) {
       const existingByNumber = await Invoice.findOne({
         invoiceNumber: { $regex: new RegExp(`^${escapeRegex(trimmedInvoiceNumber)}$`, 'i') },
+        ...orgFilter,
       }).setOptions(sessionOption);
 
       if (existingByNumber) {
         const itemSkus = (existingByNumber.items || []).map((i) => i.sku).filter(Boolean);
-        const catalogCount = itemSkus.length > 0 ? await Item.countDocuments({ sku: { $in: itemSkus } }).setOptions(sessionOption) : 0;
+        const catalogCount = itemSkus.length > 0
+          ? await Item.countDocuments({ sku: { $in: itemSkus }, ...orgFilter }).setOptions(sessionOption)
+          : 0;
         if (catalogCount > 0) {
           console.log(`[InventoryService] Invoice "${trimmedInvoiceNumber}" already processed. Skipping duplicate restock.`);
-          return {
-            invoice: existingByNumber,
-            skipped: true,
-            reason: `Invoice #${trimmedInvoiceNumber} already exists in records`,
-          };
+          return { invoice: existingByNumber, skipped: true, reason: `Invoice #${trimmedInvoiceNumber} already exists in records` };
         } else {
           console.log(`[InventoryService] Invoice "${trimmedInvoiceNumber}" found in records but items were missing from catalog. Replacing invoice and restocking items.`);
           await Invoice.deleteOne({ _id: existingByNumber._id }).setOptions(sessionOption);
@@ -123,8 +124,9 @@ export const processRestock = async (invoiceData, messageId = null) => {
       }
     }
 
-    // 2. Persist Invoice document
+    // 3. Persist Invoice document
     const invoiceDoc = new Invoice({
+      organizationId: organizationId || undefined,
       messageId: messageId || null,
       invoiceNumber: invoiceData.invoiceNumber,
       vendor: invoiceData.vendorName || invoiceData.vendor || 'Unknown Vendor',
@@ -137,7 +139,7 @@ export const processRestock = async (invoiceData, messageId = null) => {
 
     const processedItems = [];
 
-    // 3. Process each line item atomically
+    // 4. Process each line item atomically
     for (const lineItem of invoiceData.items || []) {
       const sku = (lineItem.sku || '').trim().toUpperCase();
       const name = (lineItem.name || '').trim();
@@ -146,8 +148,9 @@ export const processRestock = async (invoiceData, messageId = null) => {
 
       if (quantity === 0) continue;
 
-      // Match atomically by SKU or case-insensitive name
+      // Match atomically by SKU or case-insensitive name within this org
       const query = {
+        ...orgFilter,
         $or: [
           ...(sku ? [{ sku }] : []),
           { name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } },
@@ -157,7 +160,6 @@ export const processRestock = async (invoiceData, messageId = null) => {
       let item = await Item.findOne(query).setOptions(sessionOption);
 
       if (item) {
-        // Increment stock and update latest unit cost
         item.currentStock += quantity;
         item.unitCost = unitCost;
         if (!item.sku && sku) item.sku = sku;
@@ -165,16 +167,16 @@ export const processRestock = async (invoiceData, messageId = null) => {
         if (lineItem.category && item.category === 'General') item.category = lineItem.category;
         await item.save(sessionOption);
       } else {
-        // Upsert new item
         const fallbackSku = sku || `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         const [newItem] = await Item.create(
           [
             {
+              organizationId: organizationId || undefined,
               sku: fallbackSku,
               name: name || fallbackSku,
               currentStock: quantity,
               unitCost,
-              sellingPrice: unitCost * 1.5, // sensible default markup
+              sellingPrice: unitCost * 1.5,
               reorderLevel: 10,
               category: lineItem.category || 'General',
               supplier: invoiceDoc.vendor || 'Direct Supplier',
@@ -185,10 +187,11 @@ export const processRestock = async (invoiceData, messageId = null) => {
         item = newItem;
       }
 
-      // 4. Create corresponding InventoryTransaction record (PURCHASE_INVOICE)
+      // 5. Create PURCHASE_INVOICE transaction record
       const [tx] = await InventoryTransaction.create(
         [
           {
+            organizationId: organizationId || item.organizationId || undefined,
             itemId: item._id,
             type: 'PURCHASE_INVOICE',
             quantityDelta: quantity,
@@ -198,6 +201,7 @@ export const processRestock = async (invoiceData, messageId = null) => {
             supplier: item.supplier || invoiceDoc.vendor || null,
             paymentMode: 'BANK_TRANSFER',
             paymentAmount: quantity * unitCost,
+
           },
         ],
         sessionOption
@@ -240,6 +244,7 @@ export const recordSale = async ({
   paymentScreenshot = null,
   customerName = null,
   notes = null,
+  organizationId = null,
 }) => {
   const normalizedSku = (sku || '').trim().toUpperCase();
   const qty = Number(quantity);
@@ -252,6 +257,8 @@ export const recordSale = async ({
     throw new InventoryError('Sale quantity must be a positive integer greater than 0', 400);
   }
 
+  const orgFilter = organizationId ? { organizationId } : {};
+
   let updatedItem = null;
   let transactionRecord = null;
 
@@ -263,6 +270,7 @@ export const recordSale = async ({
       {
         sku: normalizedSku,
         currentStock: { $gte: qty },
+        ...orgFilter,
       },
       {
         $inc: { currentStock: -qty },
@@ -275,7 +283,7 @@ export const recordSale = async ({
 
     // 2. If update returned null, diagnose whether item does not exist or has insufficient stock
     if (!updatedItem) {
-      const existingItem = await Item.findOne({ sku: normalizedSku }).setOptions(sessionOption);
+      const existingItem = await Item.findOne({ sku: normalizedSku, ...orgFilter }).setOptions(sessionOption);
 
       if (!existingItem) {
         throw new InventoryError(`Item with SKU '${normalizedSku}' not found.`, 400);
@@ -299,6 +307,7 @@ export const recordSale = async ({
     const [tx] = await InventoryTransaction.create(
       [
         {
+          organizationId: organizationId || updatedItem.organizationId || undefined,
           itemId: updatedItem._id,
           type: 'SALE',
           quantityDelta: -qty,

@@ -26,34 +26,24 @@ export const uploadInvoice = async (req, res, next) => {
       });
     }
 
-    console.log(`[InventoryController] Parsing uploaded invoice file "${req.file.originalname}" (${req.file.size} bytes)...`);
+    const organizationId = req.user?.organizationId;
+    console.log(`[InventoryController] Parsing uploaded invoice file "${req.file.originalname}" (${req.file.size} bytes) for org ${organizationId}...`);
 
-    // 1. Extract invoice data via Gemini
     const extractedData = await parseInvoicePDF(req.file.buffer);
-
-    // 2. Ingest into inventory via atomic transaction
-    const result = await processRestock(extractedData);
+    const result = await processRestock(extractedData, null, organizationId);
 
     if (result.skipped) {
       return res.status(200).json({
         success: true,
-        message: result.reason || `Invoice #${extractedData.invoiceNumber} was already processed previously. Duplicate restock avoided.`,
-        data: {
-          invoice: result.invoice,
-          itemsProcessed: [],
-          skipped: true,
-        },
+        message: result.reason || `Invoice #${extractedData.invoiceNumber} was already processed previously.`,
+        data: { invoice: result.invoice, itemsProcessed: [], skipped: true },
       });
     }
 
     return res.status(201).json({
       success: true,
       message: 'Invoice processed and inventory successfully restocked.',
-      data: {
-        invoice: result.invoice,
-        itemsProcessed: result.itemsProcessed,
-        skipped: false,
-      },
+      data: { invoice: result.invoice, itemsProcessed: result.itemsProcessed, skipped: false },
     });
   } catch (error) {
     next(error);
@@ -78,6 +68,8 @@ export const recordSaleController = async (req, res, next) => {
       notes,
     } = req.body;
 
+    const organizationId = req.user?.organizationId;
+
     const result = await recordSale({
       sku,
       quantity,
@@ -88,22 +80,17 @@ export const recordSaleController = async (req, res, next) => {
       paymentScreenshot,
       customerName,
       notes,
+      organizationId,
     });
 
     return res.status(200).json({
       success: true,
       message: `Sale recorded successfully for SKU ${sku}.`,
-      data: {
-        item: result.item,
-        transaction: result.transaction,
-      },
+      data: { item: result.item, transaction: result.transaction },
     });
   } catch (error) {
     if (error instanceof InventoryError) {
-      return res.status(error.statusCode).json({
-        success: false,
-        error: error.message,
-      });
+      return res.status(error.statusCode).json({ success: false, error: error.message });
     }
     next(error);
   }
@@ -123,42 +110,26 @@ export const getItems = async (req, res, next) => {
     const category = (req.query.category || '').trim();
     const supplier = (req.query.supplier || '').trim();
 
-    const filter = {};
+    const organizationId = req.user?.organizationId;
+    const filter = organizationId ? { organizationId } : {};
 
     if (search) {
       const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       filter.$or = [{ sku: searchRegex }, { name: searchRegex }, { category: searchRegex }, { supplier: searchRegex }];
     }
 
-    if (category) {
-      filter.category = category;
-    }
-
-    if (supplier) {
-      filter.supplier = supplier;
-    }
-
-    if (lowStock) {
-      filter.$expr = { $lte: ['$currentStock', '$reorderLevel'] };
-    }
+    if (category) filter.category = category;
+    if (supplier) filter.supplier = supplier;
+    if (lowStock) filter.$expr = { $lte: ['$currentStock', '$reorderLevel'] };
 
     const [total, items] = await Promise.all([
       Item.countDocuments(filter),
-      Item.find(filter)
-        .sort({ updatedAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      Item.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit).lean(),
     ]);
 
     return res.status(200).json({
       success: true,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) || 1 },
       items,
     });
   } catch (error) {
@@ -177,7 +148,8 @@ export const getTransactions = async (req, res, next) => {
     const skip = (page - 1) * limit;
     const { type, itemId } = req.query;
 
-    const filter = {};
+    const organizationId = req.user?.organizationId;
+    const filter = organizationId ? { organizationId } : {};
     if (type) filter.type = type;
     if (itemId) filter.itemId = itemId;
 
@@ -193,12 +165,7 @@ export const getTransactions = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) || 1 },
       transactions,
     });
   } catch (error) {
@@ -216,23 +183,17 @@ export const getInvoices = async (req, res, next) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
+    const organizationId = req.user?.organizationId;
+    const filter = organizationId ? { organizationId } : {};
+
     const [total, invoices] = await Promise.all([
-      Invoice.countDocuments(),
-      Invoice.find()
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      Invoice.countDocuments(filter),
+      Invoice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     ]);
 
     return res.status(200).json({
       success: true,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) || 1 },
       invoices,
     });
   } catch (error) {
@@ -247,8 +208,9 @@ export const getInvoices = async (req, res, next) => {
 export const triggerGmailSync = async (req, res, next) => {
   try {
     const forceRescan = req.body?.forceRescan === true || req.query?.force === 'true';
-    console.log(`[InventoryController] Manual trigger received for Gmail sync (forceRescan=${forceRescan})...`);
-    const result = await syncGmailInvoices({ forceRescan });
+    const organizationId = req.user?.organizationId;
+    console.log(`[InventoryController] Manual trigger received for Gmail sync (forceRescan=${forceRescan}, org=${organizationId})...`);
+    const result = await syncGmailInvoices({ forceRescan, organizationId });
 
     return res.status(200).json({
       success: true,
@@ -269,14 +231,19 @@ export const updateItem = async (req, res, next) => {
     const { id } = req.params;
     const { name, sku, currentStock, unitCost, sellingPrice, reorderLevel, category, supplier } = req.body;
 
-    const item = await Item.findById(id);
+    const organizationId = req.user?.organizationId;
+    const item = await Item.findOne({ _id: id, ...(organizationId && { organizationId }) });
     if (!item) {
       return res.status(404).json({ success: false, error: 'Item not found' });
     }
 
-    // Check SKU collision if modified
+    // Check SKU collision if modified (within same org)
     if (sku && sku.toUpperCase() !== item.sku) {
-      const existingSku = await Item.findOne({ sku: sku.toUpperCase(), _id: { $ne: id } });
+      const existingSku = await Item.findOne({
+        sku: sku.toUpperCase(),
+        _id: { $ne: id },
+        ...(organizationId && { organizationId }),
+      });
       if (existingSku) {
         return res.status(400).json({
           success: false,
@@ -293,13 +260,13 @@ export const updateItem = async (req, res, next) => {
     if (sellingPrice !== undefined) item.sellingPrice = Math.max(0, Number(sellingPrice));
     if (reorderLevel !== undefined) item.reorderLevel = Math.max(0, Number(reorderLevel));
 
-    // If stock changed manually, log an ADJUSTMENT transaction in the ledger
     if (currentStock !== undefined && Number(currentStock) !== item.currentStock) {
       const delta = Number(currentStock) - item.currentStock;
       item.currentStock = Math.max(0, Number(currentStock));
 
       await InventoryTransaction.create({
         itemId: item._id,
+        organizationId: item.organizationId,
         type: 'ADJUSTMENT',
         quantityDelta: delta,
         unitPrice: item.unitCost,
@@ -326,7 +293,8 @@ export const updateItem = async (req, res, next) => {
 export const deleteItem = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const item = await Item.findByIdAndDelete(id);
+    const organizationId = req.user?.organizationId;
+    const item = await Item.findOneAndDelete({ _id: id, ...(organizationId && { organizationId }) });
 
     if (!item) {
       return res.status(404).json({ success: false, error: 'Item not found' });
@@ -348,15 +316,15 @@ export const deleteItem = async (req, res, next) => {
 export const deleteInvoice = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const invoice = await Invoice.findByIdAndDelete(id);
+    const organizationId = req.user?.organizationId;
+    const invoice = await Invoice.findOneAndDelete({ _id: id, ...(organizationId && { organizationId }) });
 
     if (!invoice) {
       return res.status(404).json({ success: false, error: 'Invoice not found' });
     }
 
-    // Remove from ProcessedMail cache if it was synced from Gmail
     if (invoice.messageId) {
-      await ProcessedMail.deleteOne({ messageId: invoice.messageId });
+      await ProcessedMail.deleteOne({ messageId: invoice.messageId, ...(organizationId && { organizationId }) });
     }
 
     return res.status(200).json({
@@ -369,21 +337,24 @@ export const deleteInvoice = async (req, res, next) => {
 };
 
 /**
- * Reset all records (Catalog, Invoices, Transactions, Mail Cache) for testing
+ * Reset all records for the current organization only
  * POST /api/inventory/reset
  */
 export const resetDatabase = async (req, res, next) => {
   try {
+    const organizationId = req.user?.organizationId;
+    const filter = organizationId ? { organizationId } : {};
+
     await Promise.all([
-      Item.deleteMany({}),
-      Invoice.deleteMany({}),
-      InventoryTransaction.deleteMany({}),
-      ProcessedMail.deleteMany({}),
+      Item.deleteMany(filter),
+      Invoice.deleteMany(filter),
+      InventoryTransaction.deleteMany(filter),
+      ProcessedMail.deleteMany(filter),
     ]);
 
     return res.status(200).json({
       success: true,
-      message: 'All inventory items, invoices, and transaction ledger records have been reset.',
+      message: 'All inventory items, invoices, and transaction ledger records for your store have been reset.',
     });
   } catch (error) {
     next(error);

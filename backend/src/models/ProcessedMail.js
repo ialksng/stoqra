@@ -2,10 +2,15 @@ import mongoose from 'mongoose';
 
 const processedMailSchema = new mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      index: true,
+      default: null,
+    },
     messageId: {
       type: String,
       required: [true, 'messageId is required'],
-      unique: true,
       trim: true,
       index: true,
     },
@@ -32,6 +37,9 @@ const processedMailSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// messageId unique per org
+processedMailSchema.index({ messageId: 1, organizationId: 1 }, { unique: true });
 
 const ProcessedMail = mongoose.model('ProcessedMail', processedMailSchema);
 

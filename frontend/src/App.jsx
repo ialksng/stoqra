@@ -12,6 +12,7 @@ import UploadInvoiceModal from './components/UploadInvoiceModal.jsx';
 import RecordSaleModal from './components/RecordSaleModal.jsx';
 import EditItemModal from './components/EditItemModal.jsx';
 import DeleteConfirmModal from './components/DeleteConfirmModal.jsx';
+import StoreSetupModal from './components/StoreSetupModal.jsx';
 import LoginView from './components/LoginView.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import {
@@ -401,7 +402,7 @@ function Dashboard() {
 }
 
 function AppShell() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, isOnboarded, user, completeOrgSetup } = useAuth();
 
   if (loading) {
     return (
@@ -417,6 +418,19 @@ function AppShell() {
 
   if (!isAuthenticated) {
     return <LoginView />;
+  }
+
+  // Show store setup modal for new users who haven't set up their store yet
+  if (!isOnboarded) {
+    return (
+      <>
+        <StoreSetupModal user={user} onSetupComplete={completeOrgSetup} />
+        {/* Blurred placeholder dashboard in background */}
+        <div style={{ filter: 'blur(4px)', pointerEvents: 'none', opacity: 0.3 }}>
+          <Dashboard />
+        </div>
+      </>
+    );
   }
 
   return <Dashboard />;

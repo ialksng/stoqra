@@ -81,7 +81,7 @@ router.post('/invoices/upload', requireAuth, upload.single('invoice'), uploadInv
 router.post('/sales/record', requireAuth, validateBody(recordSaleSchema), recordSaleController);
 
 // 3. Paginated inventory catalog lookup with search & low-stock filter
-router.get('/inventory/items', getItems);
+router.get('/inventory/items', requireAuth, getItems);
 
 // 4. Update an existing catalog item
 router.put('/inventory/items/:id', requireAuth, validateBody(updateItemSchema), updateItem);
@@ -90,15 +90,15 @@ router.put('/inventory/items/:id', requireAuth, validateBody(updateItemSchema), 
 router.delete('/inventory/items/:id', requireAuth, deleteItem);
 
 // 6. Ledger history of inventory transactions
-router.get('/inventory/transactions', getTransactions);
+router.get('/inventory/transactions', requireAuth, getTransactions);
 
 // 7. Ingested invoice records
-router.get('/invoices', getInvoices);
+router.get('/invoices', requireAuth, getInvoices);
 
 // 8. Delete an invoice record
 router.delete('/invoices/:id', requireAuth, deleteInvoice);
 
-// 9. Reset database records for testing
+// 9. Reset / delete all store data (org-scoped)
 router.post('/inventory/reset', requireAuth, resetDatabase);
 
 // 10. Manual trigger for Gmail background worker polling

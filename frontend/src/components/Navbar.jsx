@@ -75,8 +75,8 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onSyncComplete, onExportRepor
     <header className="navbar">
       <div className="brand">
         <Package size={26} />
-        <span>Stoqra</span>
-        <span className="brand-badge">GST Auto Inventory</span>
+        <span>{user?.organization?.name || 'Stoqra'}</span>
+        <span className="brand-badge">{user?.organization?.type || 'GST Auto Inventory'}</span>
       </div>
 
       <div className="nav-actions">

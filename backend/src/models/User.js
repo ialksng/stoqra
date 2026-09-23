@@ -33,6 +33,16 @@ const userSchema = new mongoose.Schema(
       },
       default: 'admin',
     },
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      default: null,
+      index: true,
+    },
+    isOnboarded: {
+      type: Boolean,
+      default: false,
+    },
     lastLogin: {
       type: Date,
       default: Date.now,

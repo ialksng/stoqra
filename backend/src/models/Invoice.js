@@ -28,18 +28,22 @@ const invoiceItemSchema = new mongoose.Schema(
 
 const invoiceSchema = new mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true,
+    },
     messageId: {
       type: String,
-      unique: true,
-      sparse: true,
       trim: true,
       index: true,
+      sparse: true,
     },
     invoiceNumber: {
       type: String,
       required: [true, 'Invoice number is required'],
       trim: true,
-      index: true,
     },
     vendor: {
       type: String,
@@ -72,6 +76,11 @@ const invoiceSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Compound unique: messageId unique per org (not globally)
+invoiceSchema.index({ messageId: 1, organizationId: 1 }, { unique: true, sparse: true });
+// invoiceNumber unique per org
+invoiceSchema.index({ invoiceNumber: 1, organizationId: 1 });
 
 const Invoice = mongoose.model('Invoice', invoiceSchema);
 

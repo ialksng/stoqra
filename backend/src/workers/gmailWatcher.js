@@ -51,10 +51,12 @@ const findPdfParts = (payload) => {
  * Execute Gmail invoice ingestion sync
  * @param {Object} [options] - Sync configuration options
  * @param {boolean} [options.forceRescan] - Force re-evaluation of previously scanned emails
+ * @param {string} [options.organizationId] - Scope ingested items to this organization
  * @returns {Promise<{ status?: string, processed: number, skipped: number, errors: number, totalEmailsFound: number, details: Array }>}
  */
 export const syncGmailInvoices = async (options = {}) => {
   const forceRescan = options?.forceRescan === true;
+  const organizationId = options?.organizationId || null;
 
   if (isSyncInProgress) {
     if (syncStartTime && Date.now() - syncStartTime > 90000) {
@@ -68,7 +70,7 @@ export const syncGmailInvoices = async (options = {}) => {
 
   isSyncInProgress = true;
   syncStartTime = Date.now();
-  console.log(`[GmailWatcher] Starting Gmail invoice polling cycle (forceRescan=${forceRescan})...`);
+  console.log(`[GmailWatcher] Starting Gmail invoice polling cycle (forceRescan=${forceRescan}, org=${organizationId})...`);
 
   const results = {
     processed: 0,
@@ -261,8 +263,8 @@ export const syncGmailInvoices = async (options = {}) => {
             }
 
             // 5. Ingest into stock database atomically
-            console.log(`[GmailWatcher] Ingesting parsed invoice "${extractedInvoice.invoiceNumber}" into stock ledger...`);
-            const restockResult = await processRestock(extractedInvoice, messageId);
+            console.log(`[GmailWatcher] Ingesting parsed invoice "${extractedInvoice.invoiceNumber}" into stock ledger (org=${organizationId})...`);
+            const restockResult = await processRestock(extractedInvoice, messageId, organizationId);
 
             if (restockResult.skipped) {
               console.log(`[GmailWatcher] Invoice "${extractedInvoice.invoiceNumber}" duplicate skipped: ${restockResult.reason}`);
@@ -376,7 +378,8 @@ export const syncGmailInvoices = async (options = {}) => {
 };
 
 /**
- * Start scheduled cron job (Runs every 15 minutes: * /15 * * * *)
+ * Start scheduled cron job (Runs every 15 minutes)
+ * Resolves the primary admin's organization to scope Gmail-synced invoices.
  */
 export const startGmailWatcher = () => {
   const cronExpression = '*/15 * * * *';
@@ -388,7 +391,30 @@ export const startGmailWatcher = () => {
   console.log(`[GmailWatcher] Initializing cron worker scheduled at: "${cronExpression}"`);
   cronTask = cron.schedule(cronExpression, async () => {
     try {
-      await syncGmailInvoices();
+      // Resolve primary admin user's organizationId for cron-based sync
+      let organizationId = null;
+      try {
+        const User = (await import('../models/User.js')).default;
+        const adminEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_ALERT_EMAIL || '')
+          .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+        if (adminEmails.length > 0) {
+          const adminUser = await User.findOne({ email: { $in: adminEmails } }).lean();
+          if (adminUser?.organizationId) {
+            organizationId = adminUser.organizationId.toString();
+          }
+        }
+        // Fallback: find any admin with an org
+        if (!organizationId) {
+          const anyAdmin = await User.findOne({ role: 'admin', organizationId: { $ne: null } }).lean();
+          if (anyAdmin?.organizationId) {
+            organizationId = anyAdmin.organizationId.toString();
+          }
+        }
+      } catch (lookupErr) {
+        console.warn('[GmailWatcher] Could not resolve admin org for cron sync:', lookupErr.message);
+      }
+
+      await syncGmailInvoices({ organizationId });
     } catch (err) {
       console.error('[GmailWatcher] Cron tick unhandled error:', err.message);
     }

@@ -2,6 +2,12 @@ import mongoose from 'mongoose';
 
 const inventoryTransactionSchema = new mongoose.Schema(
   {
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      required: true,
+      index: true,
+    },
     itemId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Item',
@@ -75,9 +81,9 @@ const inventoryTransactionSchema = new mongoose.Schema(
   }
 );
 
-// Compound index for time-range sales velocity queries
-inventoryTransactionSchema.index({ type: 1, createdAt: -1 });
-inventoryTransactionSchema.index({ itemId: 1, type: 1, createdAt: -1 });
+// Compound indexes for time-range queries scoped by org
+inventoryTransactionSchema.index({ organizationId: 1, type: 1, createdAt: -1 });
+inventoryTransactionSchema.index({ organizationId: 1, itemId: 1, type: 1, createdAt: -1 });
 
 const InventoryTransaction = mongoose.model('InventoryTransaction', inventoryTransactionSchema);
 

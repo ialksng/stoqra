@@ -3,6 +3,7 @@ import {
   getSalesVelocity,
   getComprehensiveDashboard,
 } from '../services/analyticsService.js';
+import { requireAuth } from '../middlewares/auth.js';
 
 /**
  * Get inventory stock health summary, valuation, and reorder alerts
@@ -10,11 +11,9 @@ import {
  */
 export const getStockHealthController = async (req, res, next) => {
   try {
-    const data = await getStockHealth();
-    return res.status(200).json({
-      success: true,
-      data,
-    });
+    const organizationId = req.user?.organizationId;
+    const data = await getStockHealth(organizationId);
+    return res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
   }
@@ -27,11 +26,9 @@ export const getStockHealthController = async (req, res, next) => {
 export const getSalesVelocityController = async (req, res, next) => {
   try {
     const days = parseInt(req.query.days, 10) || 30;
-    const data = await getSalesVelocity(days);
-    return res.status(200).json({
-      success: true,
-      data,
-    });
+    const organizationId = req.user?.organizationId;
+    const data = await getSalesVelocity(days, organizationId);
+    return res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
   }
@@ -44,11 +41,9 @@ export const getSalesVelocityController = async (req, res, next) => {
 export const getComprehensiveDashboardController = async (req, res, next) => {
   try {
     const days = parseInt(req.query.days, 10) || 30;
-    const data = await getComprehensiveDashboard(days);
-    return res.status(200).json({
-      success: true,
-      data,
-    });
+    const organizationId = req.user?.organizationId;
+    const data = await getComprehensiveDashboard(days, organizationId);
+    return res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
   }
@@ -59,4 +54,3 @@ export default {
   getSalesVelocityController,
   getComprehensiveDashboardController,
 };
-

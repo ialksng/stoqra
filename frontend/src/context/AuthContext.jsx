@@ -88,6 +88,26 @@ export const AuthProvider = ({ children }) => {
     return res;
   }, []);
 
+  /**
+   * Called after store setup is complete — updates the user state and JWT with org info
+   */
+  const completeOrgSetup = useCallback((setupRes) => {
+    if (setupRes.token) {
+      setStoredToken(setupRes.token);
+      setToken(setupRes.token);
+    }
+    if (setupRes.user) {
+      setUser(setupRes.user);
+    } else {
+      // Refresh from backend
+      fetchCurrentUser()
+        .then((meRes) => {
+          if (meRes.success && meRes.user) setUser(meRes.user);
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   const logout = useCallback(() => {
     setStoredToken(null);
     setToken(null);
@@ -99,17 +119,21 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const isOnboarded = Boolean(user?.isOnboarded && user?.organizationId);
+
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
         isAuthenticated: Boolean(user),
+        isOnboarded,
         authConfig,
         loading,
         loginWithGoogle,
         demoLogin,
         logout,
+        completeOrgSetup,
       }}
     >
       {children}

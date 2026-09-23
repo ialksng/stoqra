@@ -5,6 +5,7 @@ export const JWT_SECRET = process.env.JWT_SECRET || 'stoqra-inventory-jwt-secret
 
 /**
  * Middleware: Enforces user authentication via JWT Bearer token
+ * Attaches req.user with { userId, email, name, avatar, role, organizationId, isOnboarded }
  */
 export const requireAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -24,7 +25,7 @@ export const requireAuth = async (req, res, next) => {
     // Attach basic user payload to request
     req.user = decoded;
 
-    // Optionally check if user exists in database
+    // Fetch fresh user from DB to get latest organizationId and role
     const user = await User.findById(decoded.userId).lean();
     if (user) {
       req.user = {
@@ -33,6 +34,8 @@ export const requireAuth = async (req, res, next) => {
         name: user.name,
         avatar: user.avatar,
         role: user.role,
+        organizationId: user.organizationId ? user.organizationId.toString() : null,
+        isOnboarded: user.isOnboarded || false,
       };
     }
 
@@ -59,6 +62,18 @@ export const optionalAuth = async (req, res, next) => {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       req.user = decoded;
+      const user = await User.findById(decoded.userId).lean();
+      if (user) {
+        req.user = {
+          userId: user._id.toString(),
+          email: user.email,
+          name: user.name,
+          avatar: user.avatar,
+          role: user.role,
+          organizationId: user.organizationId ? user.organizationId.toString() : null,
+          isOnboarded: user.isOnboarded || false,
+        };
+      }
     } catch {
       // Ignore token verification errors for optional auth
     }
@@ -80,4 +95,18 @@ export const requireAdmin = async (req, res, next) => {
   next();
 };
 
-export default { requireAuth, optionalAuth, requireAdmin, JWT_SECRET };
+/**
+ * Middleware: Enforces user has an organization (has completed onboarding)
+ */
+export const requireOrg = async (req, res, next) => {
+  if (!req.user || !req.user.organizationId) {
+    return res.status(403).json({
+      success: false,
+      error: 'Store setup required. Please complete your store onboarding first.',
+      needsOnboarding: true,
+    });
+  }
+  next();
+};
+
+export default { requireAuth, optionalAuth, requireAdmin, requireOrg, JWT_SECRET };

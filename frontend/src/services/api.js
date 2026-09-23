@@ -310,6 +310,44 @@ export const triggerGmailSync = async (options = {}) => {
   return handleResponse(res);
 };
 
+// ─── Organization API ─────────────────────────────────────────────────────────
+
+export const getStoreTypes = async () => {
+  const res = await fetch(`${API_PREFIX}/org/types`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const setupOrganization = async ({ name, type }) => {
+  const res = await fetch(`${API_PREFIX}/org/setup`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ name, type }),
+  });
+  return handleResponse(res);
+};
+
+export const getMyOrganization = async () => {
+  const res = await fetch(`${API_PREFIX}/org/me`, {
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+// ─── Admin User Management ────────────────────────────────────────────────────
+
+export const deleteUser = async (id) => {
+  const res = await fetch(`${API_PREFIX}/auth/users/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
 export default {
   getStoredToken,
   setStoredToken,
@@ -327,4 +365,8 @@ export default {
   triggerGmailSync,
   fetchUsers,
   updateUserRole,
+  deleteUser,
+  getStoreTypes,
+  setupOrganization,
+  getMyOrganization,
 };

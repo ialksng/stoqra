@@ -1,12 +1,20 @@
+import mongoose from 'mongoose';
 import Item from '../models/Item.js';
 import InventoryTransaction from '../models/InventoryTransaction.js';
 
+const toObjectId = (id) => id ? new mongoose.Types.ObjectId(id) : null;
+
+
 /**
  * Compute inventory stock health, valuation, and reorder metrics
+ * @param {string} [organizationId] - Scope to specific organization
  * @returns {Promise<Object>}
  */
-export const getStockHealth = async () => {
+export const getStockHealth = async (organizationId = null) => {
+  const orgMatch = organizationId ? { organizationId: toObjectId(organizationId) } : {};
+
   const [result] = await Item.aggregate([
+    { $match: orgMatch },
     {
       $facet: {
         summary: [
@@ -96,17 +104,20 @@ export const getStockHealth = async () => {
 /**
  * Calculate 30-day burn rate, revenue, and inventory run-out projections
  * @param {number} [windowDays=30] - Lookback window in days
+ * @param {string} [organizationId] - Scope to specific organization
  * @returns {Promise<Object>}
  */
-export const getSalesVelocity = async (windowDays = 30) => {
+export const getSalesVelocity = async (windowDays = 30, organizationId = null) => {
   const days = Math.max(1, Number(windowDays) || 30);
   const lookbackDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const orgMatch = organizationId ? { organizationId: toObjectId(organizationId) } : {};
 
   const rawVelocity = await InventoryTransaction.aggregate([
     {
       $match: {
         type: 'SALE',
         createdAt: { $gte: lookbackDate },
+        ...orgMatch,
       },
     },
     {
@@ -196,20 +207,22 @@ import Invoice from '../models/Invoice.js';
 /**
  * Compute multi-dimensional comprehensive business analytics dashboard
  * @param {number} [windowDays=30] - Lookback window in days (e.g. 7, 14, 30, 90, 365)
+ * @param {string} [organizationId] - Scope to specific organization
  * @returns {Promise<Object>}
  */
-export const getComprehensiveDashboard = async (windowDays = 30) => {
+export const getComprehensiveDashboard = async (windowDays = 30, organizationId = null) => {
   const days = Math.max(1, Number(windowDays) || 30);
   const isAllTime = days >= 365;
   const lookbackDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const timeMatch = isAllTime ? {} : { createdAt: { $gte: lookbackDate } };
+  const orgFilter = organizationId ? { organizationId: toObjectId(organizationId) } : {};
 
   // 1. Stock Health & Catalog Metrics
-  const stockHealthRes = await getStockHealth();
+  const stockHealthRes = await getStockHealth(organizationId);
   const metrics = stockHealthRes.metrics;
 
   // 2. Fetch all Items for ABC analysis, Categories, and Margins
-  const allItems = await Item.find({}).lean();
+  const allItems = await Item.find({ ...orgFilter }).lean();
 
   // Compute ABC Pareto Analysis on active inventory valuation
   const sortedByValuation = allItems
@@ -265,6 +278,7 @@ export const getComprehensiveDashboard = async (windowDays = 30) => {
   const salesTx = await InventoryTransaction.find({
     type: 'SALE',
     ...timeMatch,
+    ...orgFilter,
   })
     .populate('itemId', 'name sku category supplier unitCost sellingPrice currentStock')
     .sort({ createdAt: -1 })
