@@ -6,6 +6,8 @@ export const AddItemModal = ({ isOpen, onClose, onSuccess }) => {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [category, setCategory] = useState('General');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
   const [supplier, setSupplier] = useState('');
   const [currentStock, setCurrentStock] = useState(1);
   const [unitCost, setUnitCost] = useState('');
@@ -27,10 +29,14 @@ export const AddItemModal = ({ isOpen, onClose, onSuccess }) => {
     setError('');
 
     try {
+      const resolvedCategory = isCustomCategory
+        ? (customCategory.trim() || 'General')
+        : (category.trim() || 'General');
+
       const payload = {
         name: name.trim(),
         sku: sku.trim().toUpperCase() || undefined,
-        category: category.trim() || 'General',
+        category: resolvedCategory,
         supplier: supplier.trim() || 'Direct Supplier',
         currentStock: Math.max(0, parseInt(currentStock, 10) || 0),
         unitCost: Math.max(0, parseFloat(unitCost) || 0),
@@ -55,6 +61,8 @@ export const AddItemModal = ({ isOpen, onClose, onSuccess }) => {
     setName('');
     setSku('');
     setCategory('General');
+    setIsCustomCategory(false);
+    setCustomCategory('');
     setSupplier('');
     setCurrentStock(1);
     setUnitCost('');
@@ -108,21 +116,64 @@ export const AddItemModal = ({ isOpen, onClose, onSuccess }) => {
           {/* Category & Supplier */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div className="form-group">
-              <label className="form-label">Category</label>
-              <select
-                className="form-control"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                <option value="General">General</option>
-                <option value="FMCG & Groceries">FMCG & Groceries</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Hardware & Tools">Hardware & Tools</option>
-                <option value="Apparel & Clothing">Apparel & Clothing</option>
-                <option value="Stationery & Office">Stationery & Office</option>
-                <option value="Pharmacy & Health">Pharmacy & Health</option>
-                <option value="Raw Materials">Raw Materials</option>
-              </select>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className="form-label" style={{ margin: 0 }}>Category</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomCategory(!isCustomCategory);
+                    if (!isCustomCategory) {
+                      setCustomCategory('');
+                    }
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#2563eb',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    padding: '0 2px',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {isCustomCategory ? '← Standard List' : '+ Custom Category'}
+                </button>
+              </div>
+
+              {isCustomCategory ? (
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Dairy, Spices, Bakery, Footwear"
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  autoFocus
+                />
+              ) : (
+                <select
+                  className="form-control"
+                  value={category}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setIsCustomCategory(true);
+                      setCustomCategory('');
+                    } else {
+                      setCategory(e.target.value);
+                    }
+                  }}
+                >
+                  <option value="General">General</option>
+                  <option value="FMCG & Groceries">FMCG & Groceries</option>
+                  <option value="Electronics">Electronics</option>
+                  <option value="Hardware & Tools">Hardware & Tools</option>
+                  <option value="Apparel & Clothing">Apparel & Clothing</option>
+                  <option value="Stationery & Office">Stationery & Office</option>
+                  <option value="Pharmacy & Health">Pharmacy & Health</option>
+                  <option value="Raw Materials">Raw Materials</option>
+                  <option value="__custom__">+ Enter Custom Category...</option>
+                </select>
+              )}
             </div>
 
             <div className="form-group">

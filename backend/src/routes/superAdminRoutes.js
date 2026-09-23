@@ -5,6 +5,8 @@ import {
   getAllUsers,
   getAllStores,
   getStoreCatalog,
+  deleteUser,
+  deleteStore,
 } from '../controllers/superAdminController.js';
 
 const router = express.Router();
@@ -18,9 +20,11 @@ router.get('/overview', getPlatformOverview);
 
 // All Registered Users Directory & Store breakdown
 router.get('/users', getAllUsers);
+router.delete('/users/:userId', deleteUser);
 
 // All Stores & Organizations with Owner and Inventory Valuations
 router.get('/stores', getAllStores);
+router.delete('/stores/:orgId', deleteStore);
 
 // Inspect a specific Store's Catalog & Sales
 router.get('/stores/:orgId/catalog', getStoreCatalog);

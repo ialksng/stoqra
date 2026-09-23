@@ -4,6 +4,9 @@ import Organization from '../models/Organization.js';
 import Item from '../models/Item.js';
 import Sale from '../models/Sale.js';
 import Invoice from '../models/Invoice.js';
+import StagedInvoice from '../models/StagedInvoice.js';
+import InventoryTransaction from '../models/InventoryTransaction.js';
+import ProcessedMail from '../models/ProcessedMail.js';
 import { isSuperAdminEmail } from '../middlewares/auth.js';
 
 /**
@@ -311,9 +314,113 @@ export const getStoreCatalog = async (req, res, next) => {
   }
 };
 
+/**
+ * Super Admin: Remove a user and clean up their owned stores and data
+ * DELETE /api/superadmin/users/:userId
+ */
+export const deleteUser = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (isSuperAdminEmail(user.email) || user.email.toLowerCase() === req.user.email.toLowerCase()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete the Super Administrator account.',
+      });
+    }
+
+    // Find all organizations owned by this user
+    const userStores = await Organization.find({ ownerId: user._id }).lean();
+    const storeIds = userStores.map((s) => s._id);
+
+    if (storeIds.length > 0) {
+      await Promise.all([
+        Item.deleteMany({ organizationId: { $in: storeIds } }),
+        Sale.deleteMany({ organizationId: { $in: storeIds } }),
+        Invoice.deleteMany({ organizationId: { $in: storeIds } }),
+        StagedInvoice.deleteMany({ organizationId: { $in: storeIds } }),
+        InventoryTransaction.deleteMany({ organizationId: { $in: storeIds } }),
+        ProcessedMail.deleteMany({ organizationId: { $in: storeIds } }),
+        Organization.deleteMany({ _id: { $in: storeIds } }),
+      ]);
+    }
+
+    // Unset active organizationId for any users who were associated with deleted stores
+    if (storeIds.length > 0) {
+      await User.updateMany(
+        { organizationId: { $in: storeIds } },
+        { $set: { organizationId: null, isOnboarded: false } }
+      );
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    return res.status(200).json({
+      success: true,
+      message: `User "${user.name}" (${user.email}) and ${storeIds.length} store(s) permanently removed.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Super Admin: Remove a store/organization and all its associated data
+ * DELETE /api/superadmin/stores/:orgId
+ */
+export const deleteStore = async (req, res, next) => {
+  try {
+    const { orgId } = req.params;
+
+    const store = await Organization.findById(orgId);
+    if (!store) {
+      return res.status(404).json({ success: false, error: 'Store not found' });
+    }
+
+    // Clean up all related inventory, sales, invoices, staged invoices, transactions
+    await Promise.all([
+      Item.deleteMany({ organizationId: orgId }),
+      Sale.deleteMany({ organizationId: orgId }),
+      Invoice.deleteMany({ organizationId: orgId }),
+      StagedInvoice.deleteMany({ organizationId: orgId }),
+      InventoryTransaction.deleteMany({ organizationId: orgId }),
+      ProcessedMail.deleteMany({ organizationId: orgId }),
+      Organization.findByIdAndDelete(orgId),
+    ]);
+
+    // Update users whose active store was this org
+    const affectedUsers = await User.find({ organizationId: orgId });
+    for (const u of affectedUsers) {
+      const remainingStore = await Organization.findOne({ ownerId: u._id, _id: { $ne: orgId } }).lean();
+      if (remainingStore) {
+        u.organizationId = remainingStore._id;
+        u.isOnboarded = true;
+      } else {
+        u.organizationId = null;
+        u.isOnboarded = false;
+      }
+      await u.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Store "${store.name}" and all associated inventory data permanently removed.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getPlatformOverview,
   getAllUsers,
   getAllStores,
   getStoreCatalog,
+  deleteUser,
+  deleteStore,
 };

@@ -491,6 +491,22 @@ export const fetchSuperAdminStoreCatalog = async (orgId) => {
   return handleResponse(res);
 };
 
+export const deleteSuperAdminUser = async (userId) => {
+  const res = await fetch(`${API_PREFIX}/superadmin/users/${userId}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
+export const deleteSuperAdminStore = async (orgId) => {
+  const res = await fetch(`${API_PREFIX}/superadmin/stores/${orgId}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  return handleResponse(res);
+};
+
 export default {
   getStoredToken,
   setStoredToken,
@@ -516,5 +532,8 @@ export default {
   fetchSuperAdminUsers,
   fetchSuperAdminStores,
   fetchSuperAdminStoreCatalog,
+  deleteSuperAdminUser,
+  deleteSuperAdminStore,
 };
+
 

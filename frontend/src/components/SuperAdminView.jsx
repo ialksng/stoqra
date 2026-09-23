@@ -17,12 +17,15 @@ import {
   ChevronRight,
   TrendingUp,
   Clock,
+  Trash2,
 } from 'lucide-react';
 import {
   fetchSuperAdminOverview,
   fetchSuperAdminUsers,
   fetchSuperAdminStores,
   fetchSuperAdminStoreCatalog,
+  deleteSuperAdminUser,
+  deleteSuperAdminStore,
 } from '../services/api.js';
 
 export const SuperAdminView = ({ onToast }) => {
@@ -41,6 +44,31 @@ export const SuperAdminView = ({ onToast }) => {
   const [inspectingOrg, setInspectingOrg] = useState(null);
   const [inspectData, setInspectData] = useState(null);
   const [inspectLoading, setInspectLoading] = useState(false);
+
+  // Deletion Confirmation Modal state
+  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'user' | 'store', id: string, name: string, ... }
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      if (deleteTarget.type === 'user') {
+        const res = await deleteSuperAdminUser(deleteTarget.id);
+        if (onToast) onToast(res.message || 'User and all associated data permanently removed.', 'success');
+      } else if (deleteTarget.type === 'store') {
+        const res = await deleteSuperAdminStore(deleteTarget.id);
+        if (onToast) onToast(res.message || 'Store and all associated data permanently removed.', 'success');
+      }
+      setDeleteTarget(null);
+      await loadData();
+    } catch (err) {
+      console.error('[SuperAdminView] Deletion failed:', err);
+      if (onToast) onToast(err.message || 'Failed to complete deletion', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -329,12 +357,13 @@ export const SuperAdminView = ({ onToast }) => {
                   <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Gmail Sync</th>
                   <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Joined</th>
                   <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569' }}>Last Login</th>
+                  <th style={{ padding: '12px 16px', fontWeight: '600', color: '#475569', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
                       No users match your criteria.
                     </td>
                   </tr>
@@ -459,6 +488,54 @@ export const SuperAdminView = ({ onToast }) => {
                       <td style={{ padding: '12px 16px', color: '#64748b' }}>
                         {formatDate(u.lastLogin)}
                       </td>
+
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        {u.isSuperAdmin || u.email?.toLowerCase() === 'ialksng@gmail.com' ? (
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              color: '#94a3b8',
+                              fontWeight: '600',
+                              backgroundColor: '#f1f5f9',
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            Protected
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeleteTarget({
+                                type: 'user',
+                                id: u.id,
+                                name: u.name || u.email,
+                                email: u.email,
+                                storeCount: u.storeCount || 0,
+                              })
+                            }
+                            className="btn btn-sm"
+                            style={{
+                              backgroundColor: '#fee2e2',
+                              color: '#dc2626',
+                              border: '1px solid #fca5a5',
+                              fontSize: '12px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              cursor: 'pointer',
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              fontWeight: '600',
+                            }}
+                            title="Permanently remove user"
+                          >
+                            <Trash2 size={13} />
+                            Remove
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -578,19 +655,53 @@ export const SuperAdminView = ({ onToast }) => {
                       </td>
 
                       <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                        <button
-                          onClick={() => handleInspectStore(s)}
-                          className="btn btn-secondary btn-sm"
-                          style={{
-                            fontSize: '12px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          <Eye size={13} />
-                          Inspect Shelf
-                        </button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleInspectStore(s)}
+                            className="btn btn-secondary btn-sm"
+                            style={{
+                              fontSize: '12px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <Eye size={13} />
+                            Inspect Shelf
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeleteTarget({
+                                type: 'store',
+                                id: s.id,
+                                name: s.name,
+                                typeName: s.type,
+                                ownerName: s.owner?.name,
+                                skuCount: s.metrics?.skuCount || 0,
+                              })
+                            }
+                            className="btn btn-sm"
+                            style={{
+                              backgroundColor: '#fee2e2',
+                              color: '#dc2626',
+                              border: '1px solid #fca5a5',
+                              fontSize: '12px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              cursor: 'pointer',
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              fontWeight: '600',
+                            }}
+                            title="Permanently remove store & inventory"
+                          >
+                            <Trash2 size={13} />
+                            Remove
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -755,8 +866,138 @@ export const SuperAdminView = ({ onToast }) => {
           </div>
         </div>
       )}
+
+      {/* Super Admin Removal Confirmation Modal */}
+      {deleteTarget && (
+        <div
+          className="modal-backdrop"
+          style={{
+            zIndex: 10001,
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div
+            className="modal-content modal-card"
+            style={{
+              maxWidth: '480px',
+              width: '100%',
+              padding: '24px',
+              borderRadius: '16px',
+              backgroundColor: '#ffffff',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '16px' }}>
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '10px',
+                  backgroundColor: '#fee2e2',
+                  color: '#dc2626',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={24} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px 0' }}>
+                  {deleteTarget.type === 'user' ? 'Permanently Remove User?' : 'Permanently Remove Store?'}
+                </h3>
+                <p style={{ fontSize: '13px', color: '#64748b', margin: 0, lineHeight: 1.5 }}>
+                  {deleteTarget.type === 'user' ? (
+                    <>
+                      You are about to remove <strong>{deleteTarget.name}</strong> ({deleteTarget.email}).
+                      This action will permanently delete all <strong>{deleteTarget.storeCount}</strong> store(s) owned by this user,
+                      including all items, sales records, invoices, and transaction logs.
+                    </>
+                  ) : (
+                    <>
+                      You are about to remove store <strong>{deleteTarget.name}</strong> ({deleteTarget.typeName})
+                      owned by <strong>{deleteTarget.ownerName || 'Unknown'}</strong>.
+                      This will permanently delete all <strong>{deleteTarget.skuCount}</strong> catalog items, sales records, invoices, and transactions.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '8px',
+                padding: '12px 14px',
+                marginBottom: '20px',
+                fontSize: '12px',
+                color: '#991b1b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+              <span><strong>Warning:</strong> This deletion cannot be undone. All data will be permanently wiped.</span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteLoading}
+                style={{ padding: '8px 16px', fontSize: '13px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={handleDeleteConfirm}
+                disabled={deleteLoading}
+                style={{
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: deleteLoading ? 'not-allowed' : 'pointer',
+                  opacity: deleteLoading ? 0.7 : 1,
+                }}
+              >
+                {deleteLoading ? (
+                  <>
+                    <RotateCw size={14} className="spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    Confirm Permanent Removal
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default SuperAdminView;
+
