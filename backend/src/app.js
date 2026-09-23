@@ -75,9 +75,23 @@ const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
 if (fs.existsSync(frontendDistPath)) {
   console.log(`[Static] Serving frontend from ${frontendDistPath}`);
 
+  const staticOptions = {
+    setHeaders: (res, filePath) => {
+      if (
+        filePath.endsWith('.html') ||
+        filePath.endsWith('manifest.json') ||
+        filePath.endsWith('sw.js')
+      ) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    },
+  };
+
   // Serve static assets at both /projects/stoqra and root
-  app.use('/projects/stoqra', express.static(frontendDistPath));
-  app.use(express.static(frontendDistPath));
+  app.use('/projects/stoqra', express.static(frontendDistPath, staticOptions));
+  app.use(express.static(frontendDistPath, staticOptions));
 
   // SPA fallback for client-side navigation
   const spaFallback = (req, res, next) => {
@@ -89,6 +103,7 @@ if (fs.existsSync(frontendDistPath)) {
     ) {
       return next();
     }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(frontendDistPath, 'index.html'));
   };
 
