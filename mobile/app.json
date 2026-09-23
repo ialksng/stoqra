@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Stoqra",
+    "slug": "stoqra",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2563eb"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stoqra.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to scan invoice QR codes",
+        "NSPhotoLibraryUsageDescription": "Used to upload invoice screenshots"
+      }
+    },
+    "android": {
+      "package": "com.stoqra.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2563eb"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "react-native-webview",
+        {
+          "android": {
+            "allowsInlineMediaPlayback": true
+          }
+        }
+      ]
+    ],
+    "scheme": "stoqra"
+  }
+}
