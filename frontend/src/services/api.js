@@ -181,6 +181,18 @@ export const fetchItems = async ({
   return handleResponse(res);
 };
 
+export const createItem = async (itemData) => {
+  const res = await fetch(`${API_PREFIX}/inventory/items`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(itemData),
+  });
+  return handleResponse(res);
+};
+
 export const updateItem = async (id, itemData) => {
   const res = await fetch(`${API_PREFIX}/inventory/items/${id}`, {
     method: 'PUT',

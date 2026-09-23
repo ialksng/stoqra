@@ -9,6 +9,7 @@ import {
   getInvoices,
   triggerGmailSync,
   getGmailSyncStatus,
+  createItem,
   updateItem,
   deleteItem,
   deleteInvoice,
@@ -62,6 +63,17 @@ const recordSaleSchema = z.object({
   orderId: z.string().trim().optional(),
 });
 
+const createItemSchema = z.object({
+  name: z.string().trim().min(1, 'Product name is required'),
+  sku: z.string().trim().optional(),
+  currentStock: z.number().int().nonnegative().optional(),
+  unitCost: z.number().nonnegative().optional(),
+  sellingPrice: z.number().nonnegative().optional(),
+  reorderLevel: z.number().int().nonnegative().optional(),
+  category: z.string().trim().optional(),
+  supplier: z.string().trim().optional(),
+});
+
 const updateItemSchema = z.object({
   name: z.string().trim().min(1, 'Name cannot be empty').optional(),
   sku: z.string().trim().min(1, 'SKU cannot be empty').optional(),
@@ -84,10 +96,13 @@ router.post('/sales/record', requireAuth, validateBody(recordSaleSchema), record
 // 3. Paginated inventory catalog lookup with search & low-stock filter
 router.get('/inventory/items', requireAuth, getItems);
 
-// 4. Update an existing catalog item
+// 4. Manually create a new catalog item
+router.post('/inventory/items', requireAuth, validateBody(createItemSchema), createItem);
+
+// 5. Update an existing catalog item
 router.put('/inventory/items/:id', requireAuth, validateBody(updateItemSchema), updateItem);
 
-// 5. Delete an item from the catalog
+// 6. Delete an item from the catalog
 router.delete('/inventory/items/:id', requireAuth, deleteItem);
 
 // 6. Ledger history of inventory transactions

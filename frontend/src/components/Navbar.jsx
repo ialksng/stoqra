@@ -1,8 +1,8 @@
 import React from 'react';
-import { Package, Mail, UploadCloud, ShoppingCart, LogOut, User as UserIcon, FileSpreadsheet, RotateCw } from 'lucide-react';
+import { Package, Mail, UploadCloud, ShoppingCart, LogOut, User as UserIcon, FileSpreadsheet, RotateCw, PlusCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export const Navbar = ({ onOpenUpload, onOpenSale, onOpenSyncModal, onExportReport }) => {
+export const Navbar = ({ onOpenUpload, onOpenSale, onOpenAddItem, onOpenSyncModal, onExportReport }) => {
   const { user, logout } = useAuth();
 
   return (
@@ -33,14 +33,21 @@ export const Navbar = ({ onOpenUpload, onOpenSale, onOpenSyncModal, onExportRepo
           </button>
         </div>
 
+        {onOpenAddItem && (
+          <button className="btn btn-primary" onClick={onOpenAddItem} title="Add product to inventory">
+            <PlusCircle size={16} />
+            <span>Add Product</span>
+          </button>
+        )}
+
         <button className="btn btn-secondary" onClick={() => onOpenSale(null)}>
           <ShoppingCart size={16} />
           Record Sale
         </button>
 
-        <button className="btn btn-primary" onClick={onOpenUpload}>
+        <button className="btn btn-secondary" onClick={onOpenUpload}>
           <UploadCloud size={16} />
-          Upload Invoice PDF
+          Upload Bill
         </button>
 
         {onExportReport && (

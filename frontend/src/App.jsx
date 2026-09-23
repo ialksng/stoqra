@@ -11,6 +11,7 @@ import AnalyticsDashboardView from './components/AnalyticsDashboardView.jsx';
 import UploadInvoiceModal from './components/UploadInvoiceModal.jsx';
 import RecordSaleModal from './components/RecordSaleModal.jsx';
 import EditItemModal from './components/EditItemModal.jsx';
+import AddItemModal from './components/AddItemModal.jsx';
 import DeleteConfirmModal from './components/DeleteConfirmModal.jsx';
 import StoreSetupModal from './components/StoreSetupModal.jsx';
 import GmailSyncModal from './components/GmailSyncModal.jsx';
@@ -60,6 +61,7 @@ function Dashboard() {
   const [selectedSaleItem, setSelectedSaleItem] = useState(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState(null);
+  const [addItemModalOpen, setAddItemModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteConfig, setDeleteConfig] = useState({
     title: '',
@@ -212,6 +214,7 @@ function Dashboard() {
       <Navbar
         onOpenUpload={() => setUploadModalOpen(true)}
         onOpenSale={handleOpenSaleModal}
+        onOpenAddItem={() => setAddItemModalOpen(true)}
         onOpenSyncModal={(force = false) => {
           setSyncForceRescan(force);
           setSyncModalOpen(true);
@@ -303,6 +306,7 @@ function Dashboard() {
             setLowStockOnly={setLowStockOnly}
             page={page}
             setPage={setPage}
+            onOpenAddItem={() => setAddItemModalOpen(true)}
             onOpenSaleModal={handleOpenSaleModal}
             onEditItem={handleOpenEditItem}
             onDeleteItem={handleOpenDeleteItem}
@@ -376,6 +380,15 @@ function Dashboard() {
           setEditModalOpen(false);
           setItemToEdit(null);
         }}
+        onSuccess={(msg) => {
+          addToast(msg, 'success');
+          refreshAllData();
+        }}
+      />
+
+      <AddItemModal
+        isOpen={addItemModalOpen}
+        onClose={() => setAddItemModalOpen(false)}
         onSuccess={(msg) => {
           addToast(msg, 'success');
           refreshAllData();

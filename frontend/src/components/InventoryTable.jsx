@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, ShoppingCart, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, FileSpreadsheet, Edit3, Trash2 } from 'lucide-react';
+import { Search, Filter, ShoppingCart, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, FileSpreadsheet, Edit3, Trash2, PlusCircle } from 'lucide-react';
 import { formatINR, formatIndianNumber } from '../utils/formatters.js';
 import { exportInventoryToExcel } from '../utils/excelExport.js';
 
@@ -13,6 +13,7 @@ export const InventoryTable = ({
   setLowStockOnly,
   page,
   setPage,
+  onOpenAddItem,
   onOpenSaleModal,
   onEditItem,
   onDeleteItem,
@@ -73,6 +74,17 @@ export const InventoryTable = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onOpenAddItem && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={onOpenAddItem}
+              title="Add a new product manually"
+            >
+              <PlusCircle size={14} />
+              <span>Add Product</span>
+            </button>
+          )}
+
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => exportInventoryToExcel(items)}

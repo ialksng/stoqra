@@ -253,6 +253,87 @@ export const getGmailSyncStatus = async (req, res, next) => {
 };
 
 /**
+ * Create a new inventory item manually
+ * POST /api/inventory/items
+ */
+export const createItem = async (req, res, next) => {
+  try {
+    let { name, sku, currentStock, unitCost, sellingPrice, reorderLevel, category, supplier } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Product name is required.' });
+    }
+
+    const organizationId = req.user?.organizationId;
+
+    // Auto-generate a clean SKU if empty
+    if (!sku || !sku.trim()) {
+      const prefix = name.trim().substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, 'ITM');
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      sku = `${prefix}-${randomSuffix}`;
+    } else {
+      sku = sku.trim().toUpperCase();
+    }
+
+    // Check SKU uniqueness within same organization
+    const existingSku = await Item.findOne({
+      sku,
+      ...(organizationId && { organizationId }),
+    });
+
+    if (existingSku) {
+      return res.status(400).json({
+        success: false,
+        error: `A product with SKU '${sku}' already exists in your inventory.`,
+      });
+    }
+
+    const stockQty = Math.max(0, parseInt(currentStock, 10) || 0);
+    const costPrice = Math.max(0, parseFloat(unitCost) || 0);
+    const sellPrice = Math.max(0, parseFloat(sellingPrice) || costPrice);
+    const minThreshold = Math.max(0, parseInt(reorderLevel, 10) || 5);
+
+    const newItem = await Item.create({
+      name: name.trim(),
+      sku,
+      currentStock: stockQty,
+      unitCost: costPrice,
+      sellingPrice: sellPrice,
+      reorderLevel: minThreshold,
+      category: (category || 'General').trim(),
+      supplier: (supplier || 'Manual Entry').trim(),
+      organizationId: organizationId || null,
+      batches: stockQty > 0 ? [{
+        batchNumber: `MANUAL-${Date.now()}`,
+        quantity: stockQty,
+        unitCost: costPrice,
+        receivedDate: new Date(),
+      }] : [],
+    });
+
+    // Record initial ledger transaction if stock was added
+    if (stockQty > 0) {
+      await InventoryTransaction.create({
+        itemId: newItem._id,
+        organizationId: newItem.organizationId,
+        type: 'MANUAL_RESTOCK',
+        quantityDelta: stockQty,
+        unitPrice: costPrice,
+        sourceReference: `Initial manual stock by ${req.user?.name || req.user?.email || 'User'}`,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `Product '${newItem.name}' added successfully!`,
+      item: newItem,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Update an existing inventory item
  * PUT /api/inventory/items/:id
  */
