@@ -50,8 +50,8 @@ const handleResponse = async (response) => {
     if (!errorMsg) {
       if (response.status === 502) {
         errorMsg = 'Server is currently restarting or deploying a new update. Please wait 15 seconds and retry.';
-      } else if (response.status === 504) {
-        errorMsg = 'Request timed out. Please try again.';
+      } else if (response.status === 504 || response.status === 524) {
+        errorMsg = 'Operation is processing in background. Polling live status...';
       } else if (response.status === 413) {
         errorMsg = 'File too large. Maximum PDF size is 15MB.';
       } else if (response.status === 401) {
@@ -364,13 +364,13 @@ export const resetDatabase = async () => {
 };
 
 export const triggerGmailSync = async (options = {}) => {
-  const res = await fetch(`${API_PREFIX}/worker/sync-gmail`, {
+  const res = await fetch(`${API_PREFIX}/worker/sync-gmail?async=true`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
     },
-    body: JSON.stringify(options),
+    body: JSON.stringify({ ...options, async: true }),
   });
   return handleResponse(res);
 };

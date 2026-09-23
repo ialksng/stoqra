@@ -140,20 +140,31 @@ export const GmailSyncModal = ({ isOpen, onClose, onOpenUpload, onSyncFinished, 
     });
 
     try {
-      const syncRes = await triggerGmailSync({
+      // Trigger background sync without blocking the UI thread
+      triggerGmailSync({
         forceRescan: force,
         userAccessToken: tokenToUse,
         async: true,
-      });
+      })
+        .then((syncRes) => {
+          if (syncRes?.needsAuth) {
+            setCachedUserToken(null);
+            setNeedsAuth(true);
+            setIsPolling(false);
+          }
+        })
+        .catch((err) => {
+          // Ignore proxy timeouts or background notifications
+          if (
+            !err.message?.includes('524') &&
+            !err.message?.includes('504') &&
+            !err.message?.includes('background')
+          ) {
+            console.warn('[GmailSyncModal] Trigger notice:', err.message);
+          }
+        });
 
-      if (syncRes.needsAuth) {
-        setCachedUserToken(null);
-        setNeedsAuth(true);
-        setIsPolling(false);
-        return;
-      }
-
-      // Start polling status
+      // Start polling status immediately
       pollStatus();
     } catch (err) {
       if (err.message && (err.message.includes('authorization required') || err.message.includes('401'))) {
@@ -171,6 +182,11 @@ export const GmailSyncModal = ({ isOpen, onClose, onOpenUpload, onSyncFinished, 
       const res = await getGmailSyncStatus();
       if (res.success && res.progress) {
         setProgress(res.progress);
+
+        // When scan is actively progressing in background, clear any transient network error
+        if (res.progress.inProgress) {
+          setError(null);
+        }
 
         if (!res.progress.inProgress) {
           // Sync has completed

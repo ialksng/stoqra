@@ -217,7 +217,7 @@ export const triggerGmailSync = async (req, res, next) => {
 
     console.log(`[InventoryController] Manual trigger received for Gmail sync (user=${userEmail}, forceRescan=${forceRescan}, org=${organizationId}, hasToken=${Boolean(userAccessToken)})...`);
 
-    // Launch sync process with user-scoped credentials
+    // Launch sync process with user-scoped credentials in background
     const resultPromise = syncGmailInvoices({
       forceRescan,
       organizationId,
@@ -226,8 +226,13 @@ export const triggerGmailSync = async (req, res, next) => {
       userAccessToken,
     });
 
-    // If caller requests instant background execution
-    if (req.query?.async === 'true') {
+    // Default to background async execution so Cloudflare/Render proxy never times out (524)
+    const isAsync = req.query?.async !== 'false' && req.body?.async !== false;
+    if (isAsync) {
+      resultPromise.catch((err) => {
+        console.error('[InventoryController] Background sync error:', err.message);
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Gmail ingestion worker started in background.',
