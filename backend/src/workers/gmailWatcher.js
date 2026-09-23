@@ -3,6 +3,8 @@ import { getGmailClient } from '../config/googleAuth.js';
 import Invoice from '../models/Invoice.js';
 import Item from '../models/Item.js';
 import ProcessedMail from '../models/ProcessedMail.js';
+import User from '../models/User.js';
+import Organization from '../models/Organization.js';
 import { parseInvoicePDF } from '../services/invoiceParser.js';
 import { processRestock } from '../services/inventoryService.js';
 
@@ -24,11 +26,15 @@ const findPdfParts = (payload) => {
 
     const filename = (part.filename || '').toLowerCase();
     const mime = (part.mimeType || '').toLowerCase();
+
     const isPdf =
       filename.endsWith('.pdf') ||
       mime === 'application/pdf' ||
       mime === 'application/x-pdf' ||
-      (mime === 'application/octet-stream' && filename.endsWith('.pdf'));
+      mime === 'application/acrobat' ||
+      mime === 'applications/vnd.pdf' ||
+      (mime.includes('pdf')) ||
+      ((mime === 'application/octet-stream' || mime === 'binary/octet-stream') && filename.endsWith('.pdf'));
 
     const hasContent = part.body && (part.body.attachmentId || part.body.data);
 
@@ -48,6 +54,40 @@ const findPdfParts = (payload) => {
 };
 
 /**
+ * Resolve target organization ID for Gmail sync
+ * @param {string|null} providedOrgId
+ * @returns {Promise<string|null>}
+ */
+const resolveOrganizationId = async (providedOrgId) => {
+  if (providedOrgId) return String(providedOrgId);
+
+  try {
+    // 1. Check admin user by email
+    const adminEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_ALERT_EMAIL || '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (adminEmails.length > 0) {
+      const adminUser = await User.findOne({ email: { $in: adminEmails }, organizationId: { $ne: null } }).lean();
+      if (adminUser?.organizationId) {
+        return adminUser.organizationId.toString();
+      }
+    }
+
+    // 2. Fallback to any active organization in DB
+    const firstOrg = await Organization.findOne().sort({ createdAt: 1 }).lean();
+    if (firstOrg) {
+      return firstOrg._id.toString();
+    }
+  } catch (err) {
+    console.warn('[GmailWatcher] Could not auto-resolve organization:', err.message);
+  }
+
+  return null;
+};
+
+/**
  * Execute Gmail invoice ingestion sync
  * @param {Object} [options] - Sync configuration options
  * @param {boolean} [options.forceRescan] - Force re-evaluation of previously scanned emails
@@ -56,7 +96,7 @@ const findPdfParts = (payload) => {
  */
 export const syncGmailInvoices = async (options = {}) => {
   const forceRescan = options?.forceRescan === true;
-  const organizationId = options?.organizationId || null;
+  let organizationId = options?.organizationId || null;
 
   if (isSyncInProgress) {
     if (syncStartTime && Date.now() - syncStartTime > 90000) {
@@ -70,6 +110,13 @@ export const syncGmailInvoices = async (options = {}) => {
 
   isSyncInProgress = true;
   syncStartTime = Date.now();
+
+  try {
+    organizationId = await resolveOrganizationId(organizationId);
+  } catch {
+    // Continue with whatever orgId we had
+  }
+
   console.log(`[GmailWatcher] Starting Gmail invoice polling cycle (forceRescan=${forceRescan}, org=${organizationId})...`);
 
   const results = {
@@ -93,6 +140,8 @@ export const syncGmailInvoices = async (options = {}) => {
     return { status: 'skipped', reason: errorMsg };
   }
 
+  const orgFilter = organizationId ? { organizationId } : {};
+
   try {
     for (const token of refreshTokens) {
       let gmail;
@@ -103,32 +152,35 @@ export const syncGmailInvoices = async (options = {}) => {
         continue;
       }
 
-      // 1. Clean cache if force rescan or purge transient errors
+      // 1. Clean cache if force rescan or purge transient errors for this organization
       if (forceRescan) {
-        console.log('[GmailWatcher] Force rescan active: resetting processed mail cache...');
-        await ProcessedMail.deleteMany({}).catch(() => {});
+        console.log(`[GmailWatcher] Force rescan active: resetting processed mail cache for org=${organizationId}...`);
+        await ProcessedMail.deleteMany(orgFilter).catch(() => {});
       } else {
-        await ProcessedMail.deleteMany({ status: { $in: ['ERROR', 'NO_ITEMS'] } }).catch(() => {});
+        await ProcessedMail.deleteMany({
+          ...orgFilter,
+          status: { $in: ['ERROR', 'NO_ITEMS', 'SKIPPED'] },
+        }).catch(() => {});
       }
 
-      // Search query for PDF attachments across mailbox (read and unread, all categories, excluding trash/spam)
-      const query = process.env.GMAIL_SEARCH_QUERY || 'has:attachment -in:trash -in:spam';
-      console.log(`[GmailWatcher] Executing query "${query}" (limit 50)...`);
+      // Search query: find all emails with PDF attachments across inbox, updates, promotions, etc.
+      const query = process.env.GMAIL_SEARCH_QUERY || 'filename:pdf OR has:attachment -in:trash -in:spam';
+      console.log(`[GmailWatcher] Executing query "${query}" (max 100)...`);
       let listRes = await gmail.users.messages.list({
         userId: 'me',
         q: query,
-        maxResults: 50,
+        maxResults: 100,
       });
 
       let messages = listRes.data.messages || [];
 
-      // Fallback: If 0 messages found and user has not set a custom query, check recent inbox emails
+      // Fallback: If 0 messages found, check inbox directly
       if (messages.length === 0 && !process.env.GMAIL_SEARCH_QUERY) {
         console.log('[GmailWatcher] No messages found with attachment query. Checking recent inbox emails as fallback...');
         listRes = await gmail.users.messages.list({
           userId: 'me',
           q: 'in:inbox -in:trash -in:spam',
-          maxResults: 25,
+          maxResults: 50,
         });
         messages = listRes.data.messages || [];
       }
@@ -139,48 +191,58 @@ export const syncGmailInvoices = async (options = {}) => {
       for (const msgRef of messages) {
         const messageId = msgRef.id;
 
-        // 2. Deduplication check
-        if (forceRescan) {
-          const existingInv = await Invoice.findOne({ messageId });
-          if (existingInv) {
-            const itemSkus = (existingInv.items || []).map((i) => i.sku).filter(Boolean);
-            const count = itemSkus.length > 0 ? await Item.countDocuments({ sku: { $in: itemSkus } }) : 0;
-            if (count > 0) {
-              console.log(`[GmailWatcher] Force rescan: Invoice #${existingInv.invoiceNumber} already in catalog. Skipping.`);
+        // 2. Org-scoped Deduplication Check
+        // An email is only skipped if an Invoice exists for THIS store AND its items exist in this store's catalog
+        const existingInvoice = await Invoice.findOne({ messageId, ...orgFilter });
+
+        if (existingInvoice) {
+          const itemSkus = (existingInvoice.items || []).map((i) => i.sku).filter(Boolean);
+          const catalogCount = itemSkus.length > 0
+            ? await Item.countDocuments({ sku: { $in: itemSkus }, ...orgFilter })
+            : 0;
+
+          if (catalogCount > 0 && !forceRescan) {
+            console.log(`[GmailWatcher] Invoice #${existingInvoice.invoiceNumber} already exists in store catalog. Skipping duplicate.`);
+            results.skipped += 1;
+            results.details.push({
+              messageId,
+              invoiceNumber: existingInvoice.invoiceNumber,
+              status: 'skipped',
+              reason: `Invoice #${existingInvoice.invoiceNumber} already in catalog`,
+            });
+            continue;
+          } else {
+            console.log(`[GmailWatcher] Stale or un-stocked invoice #${existingInvoice.invoiceNumber} found for messageId ${messageId}. Re-ingesting...`);
+            await Invoice.deleteOne({ _id: existingInvoice._id }).catch(() => {});
+          }
+        }
+
+        // Also check if previously marked as PROCESSED in ProcessedMail for THIS org
+        if (!forceRescan) {
+          const alreadyProcessed = await ProcessedMail.findOne({
+            messageId,
+            ...orgFilter,
+            status: 'PROCESSED',
+          });
+
+          if (alreadyProcessed) {
+            // Verify if the invoice was deleted
+            const invExists = await Invoice.findOne({ messageId, ...orgFilter });
+            if (invExists) {
+              console.log(`[GmailWatcher] Message ${messageId} already processed for this store. Skipping.`);
               results.skipped += 1;
               results.details.push({
                 messageId,
                 status: 'skipped',
-                reason: `Invoice #${existingInv.invoiceNumber} already in catalog`,
+                reason: alreadyProcessed.reason || 'already_processed',
               });
               continue;
-            } else {
-              console.log(`[GmailWatcher] Force rescan: Invoice #${existingInv.invoiceNumber} catalog items removed. Deleting stale invoice to re-ingest.`);
-              await Invoice.deleteOne({ _id: existingInv._id });
             }
-          }
-        } else {
-          const alreadyProcessed =
-            (await Invoice.findOne({ messageId })) ||
-            (await ProcessedMail.findOne({
-              messageId,
-              status: { $in: ['PROCESSED', 'DUPLICATE'] },
-            }));
-
-          if (alreadyProcessed) {
-            console.log(`[GmailWatcher] Message ${messageId} already processed. Skipping.`);
-            results.skipped += 1;
-            results.details.push({
-              messageId,
-              status: 'skipped',
-              reason: alreadyProcessed.reason || 'already_processed',
-            });
-            continue;
           }
         }
 
         try {
-          // 2. Fetch full message payload
+          // 3. Fetch full message payload
           const msgRes = await gmail.users.messages.get({
             userId: 'me',
             id: messageId,
@@ -191,8 +253,8 @@ export const syncGmailInvoices = async (options = {}) => {
           if (pdfParts.length === 0) {
             console.log(`[GmailWatcher] Message ${messageId} did not contain downloadable PDF attachments.`);
             await ProcessedMail.updateOne(
-              { messageId },
-              { messageId, status: 'SKIPPED', reason: 'no_pdf_attachment' },
+              { messageId, ...(organizationId && { organizationId }) },
+              { $set: { messageId, organizationId: organizationId || null, status: 'SKIPPED', reason: 'no_pdf_attachment' } },
               { upsert: true }
             );
             results.skipped += 1;
@@ -200,13 +262,15 @@ export const syncGmailInvoices = async (options = {}) => {
             continue;
           }
 
-          console.log(`[GmailWatcher] Processing ${pdfParts.length} PDF(s) in message ${messageId}...`);
+          console.log(`[GmailWatcher] Found ${pdfParts.length} PDF attachment(s) in message ${messageId}...`);
 
           let messageHasValidInvoice = false;
           let hadParseError = false;
 
           for (const part of pdfParts) {
-            // 3. Download PDF attachment into memory buffer (either direct data or via attachment API)
+            const filename = part.filename || 'invoice.pdf';
+
+            // 4. Download PDF attachment into memory buffer
             let pdfBuffer = null;
             if (part.body && part.body.data) {
               pdfBuffer = Buffer.from(part.body.data, 'base64url');
@@ -222,56 +286,57 @@ export const syncGmailInvoices = async (options = {}) => {
             }
 
             if (!pdfBuffer || pdfBuffer.length === 0) {
-              console.warn(`[GmailWatcher] Could not retrieve buffer for attachment "${part.filename}". Skipping.`);
+              console.warn(`[GmailWatcher] Could not retrieve buffer for attachment "${filename}". Skipping.`);
               continue;
             }
 
-            // 4. Pass buffer to Gemini PDF extraction service
-            console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${part.filename}" (${pdfBuffer.length} bytes)...`);
+            // 5. Pass buffer to Gemini PDF extraction service
+            console.log(`[GmailWatcher] Extracting invoice data via Gemini from "${filename}" (${pdfBuffer.length} bytes)...`);
             let extractedInvoice = null;
             let parseError = null;
+
             try {
               extractedInvoice = await parseInvoicePDF(pdfBuffer);
             } catch (parseErr) {
               parseError = parseErr;
               hadParseError = true;
-              console.warn(`[GmailWatcher] Gemini parse error on "${part.filename}":`, parseErr.message);
+              console.warn(`[GmailWatcher] Gemini parse error on "${filename}":`, parseErr.message);
             }
 
             if (parseError) {
               results.errors += 1;
               results.details.push({
                 messageId,
-                filename: part.filename,
+                filename,
                 status: 'error',
                 reason: parseError.message,
               });
               continue;
             }
 
-            // If PDF contains no inventory line items (e.g. non-invoice PDF), safely skip
+            // If PDF contains no inventory line items, safely skip
             if (!extractedInvoice || !extractedInvoice.items || extractedInvoice.items.length === 0) {
-              console.log(`[GmailWatcher] Attachment "${part.filename}" has no inventory items. Skipping.`);
+              console.log(`[GmailWatcher] Attachment "${filename}" has no inventory line items. Skipping.`);
               results.skipped += 1;
               results.details.push({
                 messageId,
-                filename: part.filename,
+                filename,
                 status: 'skipped',
                 reason: 'no_inventory_items',
               });
               continue;
             }
 
-            // 5. Ingest into stock database atomically
+            // 6. Ingest into stock database atomically
             console.log(`[GmailWatcher] Ingesting parsed invoice "${extractedInvoice.invoiceNumber}" into stock ledger (org=${organizationId})...`);
             const restockResult = await processRestock(extractedInvoice, messageId, organizationId);
 
             if (restockResult.skipped) {
-              console.log(`[GmailWatcher] Invoice "${extractedInvoice.invoiceNumber}" duplicate skipped: ${restockResult.reason}`);
+              console.log(`[GmailWatcher] Invoice "${extractedInvoice.invoiceNumber}" skipped: ${restockResult.reason}`);
               results.skipped += 1;
               results.details.push({
                 messageId,
-                filename: part.filename,
+                filename,
                 invoiceNumber: extractedInvoice.invoiceNumber,
                 status: 'skipped',
                 reason: restockResult.reason || 'duplicate_invoice',
@@ -283,8 +348,9 @@ export const syncGmailInvoices = async (options = {}) => {
             results.processed += 1;
             results.details.push({
               messageId,
-              filename: part.filename,
+              filename,
               invoiceNumber: extractedInvoice.invoiceNumber,
+              vendor: extractedInvoice.vendorName,
               itemsCount: extractedInvoice.items.length,
               status: 'success',
               restockResult,
@@ -292,18 +358,21 @@ export const syncGmailInvoices = async (options = {}) => {
           }
 
           if (messageHasValidInvoice) {
-            // Mark message as processed in ProcessedMail cache to avoid future re-scans
+            // Mark message as processed for this store
             await ProcessedMail.updateOne(
-              { messageId },
+              { messageId, ...(organizationId && { organizationId }) },
               {
-                messageId,
-                status: 'PROCESSED',
-                reason: 'success',
+                $set: {
+                  messageId,
+                  organizationId: organizationId || null,
+                  status: 'PROCESSED',
+                  reason: 'success',
+                },
               },
               { upsert: true }
             );
 
-            // 6. Attempt to remove UNREAD label from message if present
+            // 7. Remove UNREAD label from email
             try {
               await gmail.users.messages.modify({
                 userId: 'me',
@@ -312,30 +381,34 @@ export const syncGmailInvoices = async (options = {}) => {
                   removeLabelIds: ['UNREAD'],
                 },
               });
-              console.log(`[GmailWatcher] Cleaned UNREAD label from message ${messageId}`);
-            } catch (labelErr) {
-              // Already read or label modification not permitted
+              console.log(`[GmailWatcher] Removed UNREAD label from message ${messageId}`);
+            } catch {
+              // Ignore if label already removed
             }
           } else if (hadParseError) {
-            console.log(`[GmailWatcher] Message ${messageId} had extraction errors. Leaving eligible for re-processing.`);
+            console.log(`[GmailWatcher] Message ${messageId} had extraction errors. Leaving eligible for retry.`);
             await ProcessedMail.updateOne(
-              { messageId },
+              { messageId, ...(organizationId && { organizationId }) },
               {
-                messageId,
-                status: 'ERROR',
-                reason: 'temporary_ai_error',
+                $set: {
+                  messageId,
+                  organizationId: organizationId || null,
+                  status: 'ERROR',
+                  reason: 'temporary_ai_error',
+                },
               },
               { upsert: true }
             );
-            // Keep UNREAD label intact so email is not prematurely marked as read
           } else {
-            // PDF had 0 inventory items and no parse error
             await ProcessedMail.updateOne(
-              { messageId },
+              { messageId, ...(organizationId && { organizationId }) },
               {
-                messageId,
-                status: 'NO_ITEMS',
-                reason: 'no_inventory_items',
+                $set: {
+                  messageId,
+                  organizationId: organizationId || null,
+                  status: 'NO_ITEMS',
+                  reason: 'no_inventory_items',
+                },
               },
               { upsert: true }
             );
@@ -343,8 +416,8 @@ export const syncGmailInvoices = async (options = {}) => {
         } catch (msgError) {
           console.error(`[GmailWatcher] Error processing message ${messageId}:`, msgError.message);
           await ProcessedMail.updateOne(
-            { messageId },
-            { messageId, status: 'ERROR', reason: msgError.message },
+            { messageId, ...(organizationId && { organizationId }) },
+            { $set: { messageId, organizationId: organizationId || null, status: 'ERROR', reason: msgError.message } },
             { upsert: true }
           );
           results.errors += 1;
@@ -379,7 +452,6 @@ export const syncGmailInvoices = async (options = {}) => {
 
 /**
  * Start scheduled cron job (Runs every 15 minutes)
- * Resolves the primary admin's organization to scope Gmail-synced invoices.
  */
 export const startGmailWatcher = () => {
   const cronExpression = '*/15 * * * *';
@@ -391,29 +463,7 @@ export const startGmailWatcher = () => {
   console.log(`[GmailWatcher] Initializing cron worker scheduled at: "${cronExpression}"`);
   cronTask = cron.schedule(cronExpression, async () => {
     try {
-      // Resolve primary admin user's organizationId for cron-based sync
-      let organizationId = null;
-      try {
-        const User = (await import('../models/User.js')).default;
-        const adminEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_ALERT_EMAIL || '')
-          .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-        if (adminEmails.length > 0) {
-          const adminUser = await User.findOne({ email: { $in: adminEmails } }).lean();
-          if (adminUser?.organizationId) {
-            organizationId = adminUser.organizationId.toString();
-          }
-        }
-        // Fallback: find any admin with an org
-        if (!organizationId) {
-          const anyAdmin = await User.findOne({ role: 'admin', organizationId: { $ne: null } }).lean();
-          if (anyAdmin?.organizationId) {
-            organizationId = anyAdmin.organizationId.toString();
-          }
-        }
-      } catch (lookupErr) {
-        console.warn('[GmailWatcher] Could not resolve admin org for cron sync:', lookupErr.message);
-      }
-
+      const organizationId = await resolveOrganizationId(null);
       await syncGmailInvoices({ organizationId });
     } catch (err) {
       console.error('[GmailWatcher] Cron tick unhandled error:', err.message);

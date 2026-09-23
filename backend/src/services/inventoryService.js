@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Item from '../models/Item.js';
 import InventoryTransaction from '../models/InventoryTransaction.js';
 import Invoice from '../models/Invoice.js';
+import Organization from '../models/Organization.js';
 import { dispatchLowStockAlert } from './alertService.js';
 
 /**
@@ -77,8 +78,19 @@ export const processRestock = async (invoiceData, messageId = null, organization
     throw new InventoryError('No valid line items found in the invoice document.', 400);
   }
 
+  // If organizationId is not provided, resolve fallback org from DB
+  let resolvedOrgId = organizationId;
+  if (!resolvedOrgId) {
+    try {
+      const defaultOrg = await Organization.findOne().sort({ createdAt: 1 }).lean();
+      if (defaultOrg) resolvedOrgId = defaultOrg._id.toString();
+    } catch (e) {
+      console.warn('[InventoryService] Could not resolve fallback organization:', e.message);
+    }
+  }
+
   // Build org filter for all queries
-  const orgFilter = organizationId ? { organizationId } : {};
+  const orgFilter = resolvedOrgId ? { organizationId: resolvedOrgId } : {};
 
   return await runInTransaction(async (session) => {
     const sessionOption = session ? { session } : {};
@@ -126,7 +138,7 @@ export const processRestock = async (invoiceData, messageId = null, organization
 
     // 3. Persist Invoice document
     const invoiceDoc = new Invoice({
-      organizationId: organizationId || undefined,
+      organizationId: resolvedOrgId || organizationId || undefined,
       messageId: messageId || null,
       invoiceNumber: invoiceData.invoiceNumber,
       vendor: invoiceData.vendorName || invoiceData.vendor || 'Unknown Vendor',
@@ -149,12 +161,13 @@ export const processRestock = async (invoiceData, messageId = null, organization
       if (quantity === 0) continue;
 
       // Match atomically by SKU or case-insensitive name within this org
+      const orConditions = [];
+      if (sku) orConditions.push({ sku });
+      if (name) orConditions.push({ name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } });
+
       const query = {
         ...orgFilter,
-        $or: [
-          ...(sku ? [{ sku }] : []),
-          { name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } },
-        ],
+        ...(orConditions.length > 0 ? { $or: orConditions } : { sku: `SKU-${Date.now()}` }),
       };
 
       let item = await Item.findOne(query).setOptions(sessionOption);
@@ -171,7 +184,7 @@ export const processRestock = async (invoiceData, messageId = null, organization
         const [newItem] = await Item.create(
           [
             {
-              organizationId: organizationId || undefined,
+              organizationId: resolvedOrgId || organizationId || undefined,
               sku: fallbackSku,
               name: name || fallbackSku,
               currentStock: quantity,
@@ -191,7 +204,7 @@ export const processRestock = async (invoiceData, messageId = null, organization
       const [tx] = await InventoryTransaction.create(
         [
           {
-            organizationId: organizationId || item.organizationId || undefined,
+            organizationId: resolvedOrgId || organizationId || item.organizationId || undefined,
             itemId: item._id,
             type: 'PURCHASE_INVOICE',
             quantityDelta: quantity,
