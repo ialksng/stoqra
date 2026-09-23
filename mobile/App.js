@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
+  Image,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -96,7 +97,11 @@ export default function App() {
       {/* ─── Header Bar ─────────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerBrand}>
-          <Text style={styles.headerTitle}>📦 Stoqra</Text>
+          <Image
+            source={require('./assets/favicon.png')}
+            style={{ width: 22, height: 22, borderRadius: 4, marginRight: 6 }}
+          />
+          <Text style={styles.headerTitle}>Stoqra</Text>
           <Text style={styles.headerSubtitle}>Inventory Manager</Text>
         </View>
 
