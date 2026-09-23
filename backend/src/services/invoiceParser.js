@@ -164,7 +164,7 @@ const withTimeout = (promise, ms = 45000) => {
  *   }>
  * }>}
  */
-export const parseInvoicePDF = async (pdfBuffer) => {
+export const parseInvoicePDF = async (pdfBuffer, storeCategory = null) => {
   /**
    * Validate PDF buffer
    */
@@ -198,6 +198,13 @@ Analyze this PDF carefully.
    - store receipt
    - GST tax invoice
 
+${storeCategory ? `STORE BUSINESS CATEGORY CONTEXT:
+The merchant's store category is: "${storeCategory}".
+- If this document is clearly a personal entertainment subscription (e.g. Netflix, Spotify, Prime Video), personal meal / restaurant receipt, ride-hailing receipt (Uber/Ola), or clearly a personal consumer expense unrelated to operating a "${storeCategory}" business, set:
+  isInvoice = false
+  items = []
+- Focus extraction on trade inventory, supplies, and merchandise suitable for a "${storeCategory}" business.` : ''}
+
 2. If it is NOT an invoice, such as:
    - offer letter
    - internship letter
@@ -205,6 +212,7 @@ Analyze this PDF carefully.
    - resume
    - stock trade confirmation / trading statement / demat details
    - bank account statement / transaction advice / payment transfer slip
+   - personal streaming / digital entertainment receipt
    - academic article
    - report
    - general reading document

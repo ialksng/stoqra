@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Item from '../models/Item.js';
 import InventoryTransaction from '../models/InventoryTransaction.js';
+import Sale from '../models/Sale.js';
 
 const toObjectId = (id) => id ? new mongoose.Types.ObjectId(id) : null;
 
@@ -513,10 +514,17 @@ export const getComprehensiveDashboard = async (windowDays = 30, organizationId 
   }));
 
   // 10. Velocity & Stockout Risk Forecasting
-  const velocityRes = await getSalesVelocity(days);
+  const velocityRes = await getSalesVelocity(days, organizationId);
   const criticalRunOuts = velocityRes.items.filter(
     (i) => typeof i.daysOfInventoryRemaining === 'number' && i.daysOfInventoryRemaining <= 15
   );
+
+  // 11. Multi-Payment Split Analytics & Today's Real-time Profit
+  const [paymentAnalytics, todayMetrics, deadStock] = await Promise.all([
+    getPaymentAnalytics(organizationId, days),
+    getTodayMetrics(organizationId),
+    getDeadStock(organizationId, days),
+  ]);
 
   const realizedGrossMarginTotal = periodSalesRevenue - periodCostOfGoodsSold;
   const grossMarginPercent = periodSalesRevenue > 0
@@ -541,7 +549,15 @@ export const getComprehensiveDashboard = async (windowDays = 30, organizationId 
       grossMarginPercent,
       salesCount: salesTx.length,
       invoiceCount: invoices.length,
+      todayRevenue: todayMetrics.todayRevenue,
+      todayProfit: todayMetrics.todayProfit,
+      todayProfitMargin: todayMetrics.profitMargin,
+      deadStockCount: deadStock.totalDeadItemsCount,
+      deadStockLockedCapital: deadStock.totalLockedCapital,
     },
+    todayMetrics,
+    paymentAnalytics,
+    deadStock,
     cashFlowTimeline,
     categories,
     suppliers,
@@ -556,5 +572,131 @@ export const getComprehensiveDashboard = async (windowDays = 30, organizationId 
   };
 };
 
-export default { getStockHealth, getSalesVelocity, getComprehensiveDashboard };
+/**
+ * Aggregates sales by payment method (UPI, Cash, Card, Udhar, Split)
+ */
+export const getPaymentAnalytics = async (organizationId = null, days = 30) => {
+  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const orgMatch = organizationId ? { organizationId: toObjectId(organizationId) } : {};
+
+  const paymentStats = await Sale.aggregate([
+    {
+      $match: {
+        ...orgMatch,
+        createdAt: { $gte: startDate },
+      },
+    },
+    {
+      $group: {
+        _id: '$paymentMethod',
+        totalRevenue: { $sum: '$totalAmount' },
+        totalProfit: { $sum: '$totalProfit' },
+        transactionCount: { $sum: 1 },
+      },
+    },
+    { $sort: { totalRevenue: -1 } },
+  ]);
+
+  const grandTotal = paymentStats.reduce((acc, curr) => acc + curr.totalRevenue, 0);
+
+  return paymentStats.map((p) => ({
+    method: p._id || 'UPI',
+    totalRevenue: Math.round(p.totalRevenue * 100) / 100,
+    totalProfit: Math.round(p.totalProfit * 100) / 100,
+    transactionCount: p.transactionCount,
+    percentage: grandTotal > 0 ? Math.round((p.totalRevenue / grandTotal) * 100) : 0,
+  }));
+};
+
+/**
+ * Calculates today's real-time gross revenue and net profit
+ */
+export const getTodayMetrics = async (organizationId = null) => {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const orgMatch = organizationId ? { organizationId: toObjectId(organizationId) } : {};
+
+  const [todaySale] = await Sale.aggregate([
+    {
+      $match: {
+        ...orgMatch,
+        createdAt: { $gte: startOfToday },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        todayRevenue: { $sum: '$totalAmount' },
+        todayProfit: { $sum: '$totalProfit' },
+        salesCount: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const revenue = todaySale?.todayRevenue || 0;
+  const profit = todaySale?.todayProfit || 0;
+
+  return {
+    todayRevenue: Math.round(revenue * 100) / 100,
+    todayProfit: Math.round(profit * 100) / 100,
+    todaySalesCount: todaySale?.salesCount || 0,
+    profitMargin: revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0,
+  };
+};
+
+/**
+ * Identifies dead stock items: items in stock with 0 sales in 30+ days
+ */
+export const getDeadStock = async (organizationId = null, days = 30) => {
+  const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const orgMatch = organizationId ? { organizationId: toObjectId(organizationId) } : {};
+
+  const activeItems = await Item.find({
+    ...orgMatch,
+    currentStock: { $gt: 0 },
+  }).lean();
+
+  const recentSoldItemIds = await Sale.distinct('items.itemId', {
+    ...orgMatch,
+    createdAt: { $gte: cutoffDate },
+  });
+
+  const recentSoldSet = new Set(recentSoldItemIds.map(String));
+
+  const deadStockItems = activeItems
+    .filter((item) => !recentSoldSet.has(item._id.toString()))
+    .map((item) => {
+      const cost = Number(item.costPrice || item.unitCost || item.batches?.[0]?.unitCost || 0);
+      const lockedCapital = cost * item.currentStock;
+      return {
+        id: item._id,
+        name: item.name,
+        sku: item.sku,
+        category: item.category || 'General',
+        currentStock: item.currentStock,
+        costPrice: cost,
+        sellingPrice: Number(item.sellingPrice || 0),
+        lockedCapital: Math.round(lockedCapital * 100) / 100,
+      };
+    })
+    .sort((a, b) => b.lockedCapital - a.lockedCapital);
+
+  const totalLockedCapital = deadStockItems.reduce((acc, curr) => acc + curr.lockedCapital, 0);
+
+  return {
+    deadStockItems: deadStockItems.slice(0, 20),
+    totalDeadItemsCount: deadStockItems.length,
+    totalLockedCapital: Math.round(totalLockedCapital * 100) / 100,
+  };
+};
+
+export default {
+  getStockHealth,
+  getSalesVelocity,
+  getComprehensiveDashboard,
+  getPaymentAnalytics,
+  getTodayMetrics,
+  getDeadStock,
+};
 

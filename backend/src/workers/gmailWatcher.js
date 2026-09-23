@@ -7,6 +7,7 @@ import Item from '../models/Item.js';
 import ProcessedMail from '../models/ProcessedMail.js';
 import User from '../models/User.js';
 import Organization from '../models/Organization.js';
+import StagedInvoice from '../models/StagedInvoice.js';
 import { parseInvoicePDF } from '../services/invoiceParser.js';
 import { processRestock } from '../services/inventoryService.js';
 
@@ -170,9 +171,13 @@ export const syncGmailInvoices = async (options = {}) => {
     lastResult: null,
   };
 
+  let org = null;
   try {
     await cleanupLegacyIndexes().catch(() => {});
     organizationId = await resolveOrganizationId(organizationId);
+    if (organizationId) {
+      org = await Organization.findById(organizationId).lean().catch(() => null);
+    }
   } catch {
     // Continue
   }
@@ -333,7 +338,7 @@ export const syncGmailInvoices = async (options = {}) => {
             let parseError = null;
 
             try {
-              extractedInvoice = await parseInvoicePDF(pdfBuffer);
+              extractedInvoice = await parseInvoicePDF(pdfBuffer, org?.type);
             } catch (parseErr) {
               parseError = parseErr;
               hadParseError = true;
@@ -354,7 +359,7 @@ export const syncGmailInvoices = async (options = {}) => {
               syncProgress.skipped += 1;
               syncProgress.logs.unshift({
                 type: 'info',
-                text: `"${filename}" is not an invoice (skipped).`,
+                text: `"${filename}" is not an inventory invoice (skipped).`,
               });
               await safeRecordProcessedMail(
                 { messageId, ...(organizationId && { organizationId }) },
@@ -363,39 +368,77 @@ export const syncGmailInvoices = async (options = {}) => {
               continue;
             }
 
-            // Ingest parsed invoice
-            syncProgress.statusMessage = `Restocking catalog from Invoice #${extractedInvoice.invoiceNumber}...`;
-            const restockResult = await processRestock(extractedInvoice, messageId, organizationId);
-
-            if (restockResult.skipped) {
+            // Check if already in live Invoices or already staged
+            const existingInv = await Invoice.findOne({
+              invoiceNumber: extractedInvoice.invoiceNumber,
+              ...(organizationId && { organizationId }),
+            });
+            if (existingInv) {
               results.skipped += 1;
               syncProgress.skipped += 1;
               continue;
             }
 
+            const existingStaged = await StagedInvoice.findOne({
+              invoiceNumber: extractedInvoice.invoiceNumber,
+              ...(organizationId && { organizationId }),
+            });
+            if (existingStaged) {
+              results.skipped += 1;
+              syncProgress.skipped += 1;
+              continue;
+            }
+
+            // Stage parsed invoice for merchant review before committing to shelf
+            syncProgress.statusMessage = `Staging Invoice #${extractedInvoice.invoiceNumber} for merchant review...`;
+            const stagedInvoice = await StagedInvoice.create({
+              organizationId,
+              messageId,
+              invoiceNumber: extractedInvoice.invoiceNumber,
+              vendorName: extractedInvoice.vendorName,
+              invoiceDate: extractedInvoice.invoiceDate ? new Date(extractedInvoice.invoiceDate) : new Date(),
+              totalAmount: extractedInvoice.totalAmount || 0,
+              taxAmount: extractedInvoice.taxAmount || 0,
+              items: (extractedInvoice.items || []).map((item) => ({
+                name: item.name,
+                sku: item.sku,
+                category: item.category || org?.type || 'General',
+                quantity: item.quantity || 1,
+                costPrice: item.unitCost || 0,
+                sellingPrice: item.sellingPrice || Math.round((item.unitCost || 0) * 1.35),
+                selected: true,
+              })),
+              status: 'PENDING_REVIEW',
+              source: 'GMAIL',
+            });
+
             messageHasValidInvoice = true;
             results.processed += 1;
-            results.itemsImported += extractedInvoice.items.length;
+            results.itemsImported += stagedInvoice.items.length;
             results.invoices.push({
-              invoiceNumber: extractedInvoice.invoiceNumber,
-              vendor: extractedInvoice.vendorName,
-              totalAmount: extractedInvoice.totalAmount,
-              itemsCount: extractedInvoice.items.length,
+              id: stagedInvoice._id,
+              invoiceNumber: stagedInvoice.invoiceNumber,
+              vendor: stagedInvoice.vendorName,
+              totalAmount: stagedInvoice.totalAmount,
+              itemsCount: stagedInvoice.items.length,
+              staged: true,
             });
 
             syncProgress.processed += 1;
-            syncProgress.itemsImported += extractedInvoice.items.length;
+            syncProgress.itemsImported += stagedInvoice.items.length;
             syncProgress.invoices.unshift({
-              invoiceNumber: extractedInvoice.invoiceNumber,
-              vendor: extractedInvoice.vendorName,
-              totalAmount: extractedInvoice.totalAmount,
-              itemsCount: extractedInvoice.items.length,
+              id: stagedInvoice._id,
+              invoiceNumber: stagedInvoice.invoiceNumber,
+              vendor: stagedInvoice.vendorName,
+              totalAmount: stagedInvoice.totalAmount,
+              itemsCount: stagedInvoice.items.length,
               filename,
+              staged: true,
             });
 
             syncProgress.logs.unshift({
               type: 'success',
-              text: `✅ Imported Invoice #${extractedInvoice.invoiceNumber} from "${extractedInvoice.vendorName}" (${extractedInvoice.items.length} items, ₹${Number(extractedInvoice.totalAmount || 0).toLocaleString('en-IN')})`,
+              text: `📦 Staged Invoice #${stagedInvoice.invoiceNumber} from "${stagedInvoice.vendorName}" (${stagedInvoice.items.length} items, ₹${Number(stagedInvoice.totalAmount || 0).toLocaleString('en-IN')}) for review`,
             });
           }
 

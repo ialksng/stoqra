@@ -1,76 +1,93 @@
-import React, { useState, useEffect } from 'react';
-import { Store, ChevronDown, Loader2, Sparkles } from 'lucide-react';
-import { getStoreTypes, setupOrganization } from '../services/api.js';
-import { setStoredToken } from '../services/api.js';
+import React, { useState } from 'react';
+import {
+  Store,
+  Mail,
+  PlusCircle,
+  FileSpreadsheet,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  Sparkles,
+  Download,
+  Building2,
+  Check,
+  AlertCircle,
+} from 'lucide-react';
+import { setupOrganization, setStoredToken } from '../services/api.js';
 
 const STORE_TYPES = [
-  'Medical & Pharmacy',
-  'Electronics',
-  'FMCG & Grocery',
-  'Clothing & Apparel',
-  'Restaurant & Food',
-  'Hardware & Tools',
-  'General Retail',
-  'Stationery & Office',
-  'Automotive Parts',
-  'Cosmetics & Beauty',
-  'Agriculture & Seeds',
-  'Furniture & Home',
-  'Sports & Fitness',
-  'Books & Education',
-  'Other',
+  { label: 'Medical & Pharmacy', icon: '💊', desc: 'Prescription medicines, surgicals, wellness' },
+  { label: 'Electronics', icon: '📱', desc: 'Mobile phones, components, accessories' },
+  { label: 'FMCG & Grocery', icon: '🛒', desc: 'Packaged foods, household, daily essentials' },
+  { label: 'Clothing & Apparel', icon: '👗', desc: 'Garments, fabrics, fashion accessories' },
+  { label: 'Restaurant & Food', icon: '🍽️', desc: 'F&B supplies, kitchen inventory, ingredients' },
+  { label: 'Hardware & Tools', icon: '🔧', desc: 'Tools, electrical, building materials' },
+  { label: 'General Retail', icon: '🏪', desc: 'Departmental, multi-category retail' },
+  { label: 'Stationery & Office', icon: '📎', desc: 'Books, writing supplies, office consumables' },
+  { label: 'Automotive Parts', icon: '🚗', desc: 'Spares, lubricants, vehicle accessories' },
+  { label: 'Cosmetics & Beauty', icon: '💄', desc: 'Skincare, makeup, salon supplies' },
+  { label: 'Other', icon: '📦', desc: 'General business inventory' },
 ];
 
-const STORE_TYPE_ICONS = {
-  'Medical & Pharmacy': '💊',
-  'Electronics': '📱',
-  'FMCG & Grocery': '🛒',
-  'Clothing & Apparel': '👗',
-  'Restaurant & Food': '🍽️',
-  'Hardware & Tools': '🔧',
-  'General Retail': '🏪',
-  'Stationery & Office': '📎',
-  'Automotive Parts': '🚗',
-  'Cosmetics & Beauty': '💄',
-  'Agriculture & Seeds': '🌱',
-  'Furniture & Home': '🛋️',
-  'Sports & Fitness': '⚽',
-  'Books & Education': '📚',
-  'Other': '📦',
-};
-
 export const StoreSetupModal = ({ user, onSetupComplete }) => {
+  const [step, setStep] = useState(1); // 1 | 2 | 3
   const [storeName, setStoreName] = useState('');
-  const [storeType, setStoreType] = useState('');
+  const [storeType, setStoreType] = useState('General Retail');
+  const [ingestionChoice, setIngestionChoice] = useState('GMAIL'); // 'GMAIL' | 'MANUAL' | 'EXCEL'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e) => {
+  const downloadSampleCsv = () => {
+    const csvContent =
+      'Item Name,Category,Cost Price,Selling Price,Quantity,Low Stock Alert,SKU\n' +
+      'Paracetamol 500mg,Medicines,20,35,100,10,MED-001\n' +
+      'Amoxicillin 250mg,Medicines,45,70,50,5,MED-002\n' +
+      'Digital Thermometer,Devices,120,220,25,3,DEV-001\n' +
+      'Cotton Bandage 5cm,Surgicals,15,30,80,15,SUR-001\n';
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'Stoqra_Inventory_Template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleStep1Submit = (e) => {
     e.preventDefault();
     if (!storeName.trim()) {
-      setError('Please enter your store name.');
+      setError('Please enter your store or business name.');
       return;
     }
-    if (!storeType) {
-      setError('Please select the type of your store.');
-      return;
-    }
+    setError('');
+    setStep(2);
+  };
 
+  const handleStep2Submit = () => {
+    setStep(3);
+  };
+
+  const handleFinalLaunch = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await setupOrganization({ name: storeName.trim(), type: storeType });
+      const res = await setupOrganization({
+        name: storeName.trim(),
+        type: storeType,
+      });
+
       if (res.success) {
-        // Update the stored token with the new one that contains organizationId
         if (res.token) {
           setStoredToken(res.token);
         }
-        onSetupComplete(res);
+        onSetupComplete(res, ingestionChoice);
       } else {
-        setError(res.error || 'Setup failed. Please try again.');
+        setError(res.error || 'Store setup failed. Please try again.');
       }
     } catch (err) {
-      setError(err.message || 'Failed to create store. Please try again.');
+      setError(err.message || 'Failed to setup store.');
     } finally {
       setLoading(false);
     }
@@ -92,180 +109,487 @@ export const StoreSetupModal = ({ user, onSetupComplete }) => {
     >
       <div
         style={{
-          background: '#fff',
+          background: '#ffffff',
           borderRadius: '20px',
-          padding: '40px',
-          maxWidth: '480px',
+          padding: '36px',
+          maxWidth: '540px',
           width: '100%',
           boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
-          animation: 'fadeInUp 0.35s ease',
+          animation: 'fadeInUp 0.3s ease',
         }}
       >
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+        {/* Stoqra Official Branding Header */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <img
             src="/projects/stoqra/stoqra-logo.png"
             alt="Stoqra"
-            style={{ height: '52px', objectFit: 'contain', margin: '0 auto 16px auto', display: 'block' }}
+            style={{ height: '48px', objectFit: 'contain', margin: '0 auto 12px auto', display: 'block' }}
           />
 
-          <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: '#0f172a' }}>
-            Welcome, {user?.name?.split(' ')[0] || 'there'}! 👋
-          </h2>
-          <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: '14px' }}>
-            Let's set up your store. You can always change these later.
-          </p>
+          {/* Stepper Progress Indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
+            <div
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: step >= 1 ? '#2563eb' : '#e2e8f0',
+                color: step >= 1 ? '#fff' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                fontWeight: '700',
+              }}
+            >
+              1
+            </div>
+            <div style={{ width: '40px', height: '3px', backgroundColor: step >= 2 ? '#2563eb' : '#e2e8f0' }}></div>
+            <div
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: step >= 2 ? '#2563eb' : '#e2e8f0',
+                color: step >= 2 ? '#fff' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                fontWeight: '700',
+              }}
+            >
+              2
+            </div>
+            <div style={{ width: '40px', height: '3px', backgroundColor: step >= 3 ? '#2563eb' : '#e2e8f0' }}></div>
+            <div
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                backgroundColor: step >= 3 ? '#2563eb' : '#e2e8f0',
+                color: step >= 3 ? '#fff' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                fontWeight: '700',
+              }}
+            >
+              3
+            </div>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          {/* Store Name */}
-          <div style={{ marginBottom: '18px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>
-              Store / Business Name *
-            </label>
-            <input
-              type="text"
-              value={storeName}
-              onChange={(e) => setStoreName(e.target.value)}
-              placeholder="e.g. Ram Medicals, Krishna Electronics"
-              maxLength={80}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '1.5px solid #e2e8f0',
-                fontSize: '14px',
-                outline: 'none',
-                boxSizing: 'border-box',
-                transition: 'border-color 0.15s',
-              }}
-              onFocus={(e) => (e.target.style.borderColor = '#2563eb')}
-              onBlur={(e) => (e.target.style.borderColor = '#e2e8f0')}
-              autoFocus
-            />
+        {error && (
+          <div
+            style={{
+              padding: '10px 14px',
+              borderRadius: '8px',
+              backgroundColor: '#fee2e2',
+              color: '#dc2626',
+              fontSize: '13px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <AlertCircle size={16} />
+            <span>{error}</span>
           </div>
+        )}
 
-          {/* Store Type */}
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>
-              Type of Store *
-            </label>
-            <div style={{ position: 'relative' }}>
+        {/* ─── STEP 1: STORE PROFILE ─── */}
+        {step === 1 && (
+          <form onSubmit={handleStep1Submit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: '#0f172a' }}>
+                Step 1: Setup Your Store Profile
+              </h2>
+              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px' }}>
+                Tell us about your business to tailor AI filtering and catalog models.
+              </p>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                Store / Business Name *
+              </label>
+              <input
+                type="text"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                placeholder="e.g. Apex Pharmacy, Krishna Electronics"
+                autoFocus
+                required
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '1.5px solid #e2e8f0',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                Business Category
+              </label>
               <select
                 value={storeType}
                 onChange={(e) => setStoreType(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '10px 36px 10px 14px',
+                  padding: '10px 14px',
                   borderRadius: '10px',
                   border: '1.5px solid #e2e8f0',
                   fontSize: '14px',
                   outline: 'none',
-                  appearance: 'none',
-                  background: '#fff',
-                  color: storeType ? '#0f172a' : '#94a3b8',
-                  cursor: 'pointer',
+                  backgroundColor: '#fff',
                   boxSizing: 'border-box',
                 }}
               >
-                <option value="" disabled>Select store type...</option>
                 {STORE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {STORE_TYPE_ICONS[t]} {t}
+                  <option key={t.label} value={t.label}>
+                    {t.icon} {t.label} — {t.desc}
                   </option>
                 ))}
               </select>
-              <ChevronDown
-                size={16}
-                color="#94a3b8"
-                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-              />
+              <p style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', lineHeight: 1.4 }}>
+                💡 <strong>Smart AI Filtering:</strong> Selecting your category ensures Stoqra AI automatically ignores personal expenses (like dining receipts or video streaming subscriptions).
+              </p>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                Operating Currency
+              </label>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  backgroundColor: '#f1f5f9',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  color: '#334155',
+                  fontWeight: '600',
+                }}
+              >
+                <span>₹ INR (Indian Rupee) — GST Compliant</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px' }}
+              >
+                <span>Next: Ingestion Choice</span>
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ─── STEP 2: INGESTION CHOICE ─── */}
+        {step === 2 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: '#0f172a' }}>
+                Step 2: Choose How to Add Products
+              </h2>
+              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px' }}>
+                Select how you'd like to populate your store inventory shelf initially.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Option A: Gmail Sync */}
+              <div
+                onClick={() => setIngestionChoice('GMAIL')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  border: ingestionChoice === 'GMAIL' ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  backgroundColor: ingestionChoice === 'GMAIL' ? '#eff6ff' : '#fff',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    backgroundColor: ingestionChoice === 'GMAIL' ? '#2563eb' : '#f1f5f9',
+                    color: ingestionChoice === 'GMAIL' ? '#fff' : '#2563eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Mail size={18} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>
+                      Option A: Connect Gmail (Auto-Import Invoices)
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        padding: '1px 6px',
+                        borderRadius: '9999px',
+                        backgroundColor: '#dbeafe',
+                        color: '#1d4ed8',
+                        fontWeight: '700',
+                      }}
+                    >
+                      Recommended
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '3px 0 0', lineHeight: 1.4 }}>
+                    Automatically fetch supplier PDFs and stage them in a review drawer before adding to shelf.
+                  </p>
+                </div>
+              </div>
+
+              {/* Option B: Manual */}
+              <div
+                onClick={() => setIngestionChoice('MANUAL')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  border: ingestionChoice === 'MANUAL' ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  backgroundColor: ingestionChoice === 'MANUAL' ? '#eff6ff' : '#fff',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    backgroundColor: ingestionChoice === 'MANUAL' ? '#2563eb' : '#f1f5f9',
+                    color: ingestionChoice === 'MANUAL' ? '#fff' : '#2563eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <PlusCircle size={18} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>
+                    Option B: Add Items Manually
+                  </span>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '3px 0 0', lineHeight: 1.4 }}>
+                    Start fresh and add products one by one with live markup % margin calculation.
+                  </p>
+                </div>
+              </div>
+
+              {/* Option C: Excel */}
+              <div
+                onClick={() => setIngestionChoice('EXCEL')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  border: ingestionChoice === 'EXCEL' ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  backgroundColor: ingestionChoice === 'EXCEL' ? '#eff6ff' : '#fff',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    backgroundColor: ingestionChoice === 'EXCEL' ? '#2563eb' : '#f1f5f9',
+                    color: ingestionChoice === 'EXCEL' ? '#fff' : '#2563eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <FileSpreadsheet size={18} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>
+                      Option C: Import from Excel / CSV
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadSampleCsv();
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'none',
+                        color: '#2563eb',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                      }}
+                    >
+                      <Download size={12} />
+                      Sample CSV
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '3px 0 0', lineHeight: 1.4 }}>
+                    Upload or import existing inventory records from spreadsheets using our template.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setStep(1)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleStep2Submit}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px' }}
+              >
+                <span>Next: Shelf Launch</span>
+                <ArrowRight size={16} />
+              </button>
             </div>
           </div>
+        )}
 
-          {/* Preview badge if type selected */}
-          {storeType && (
+        {/* ─── STEP 3: SHELF LAUNCH ─── */}
+        {step === 3 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', textAlign: 'center' }}>
             <div
               style={{
-                background: '#f0f4ff',
-                border: '1px solid #c7d7fe',
-                borderRadius: '10px',
-                padding: '12px 16px',
-                marginBottom: '20px',
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: '#dcfce7',
+                color: '#16a34a',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
-                fontSize: '13px',
-                color: '#2563eb',
+                justifyContent: 'center',
+                margin: '0 auto',
               }}
             >
-              <Sparkles size={15} />
-              <span>
-                <strong>{storeName || 'Your Store'}</strong> will be set up as a{' '}
-                <strong>{storeType}</strong> store. All your inventory data will be private to your store.
-              </span>
+              <Sparkles size={28} />
             </div>
-          )}
 
-          {error && (
+            <div>
+              <h2 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>
+                Your Store is Ready for Launch!
+              </h2>
+              <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: '13px' }}>
+                Confirm your configuration and launch your live inventory dashboard.
+              </p>
+            </div>
+
             <div
               style={{
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: '8px',
-                padding: '10px 14px',
-                color: '#dc2626',
-                fontSize: '13px',
-                marginBottom: '16px',
+                backgroundColor: '#f8fafc',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0',
+                padding: '16px',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
               }}
             >
-              {error}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Store Name:</span>
+                <span style={{ fontWeight: '700', color: '#0f172a' }}>{storeName}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Business Category:</span>
+                <span style={{ fontWeight: '600', color: '#2563eb' }}>{storeType}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Currency:</span>
+                <span style={{ fontWeight: '600', color: '#0f172a' }}>₹ INR</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Starting Ingestion:</span>
+                <span style={{ fontWeight: '600', color: '#0f172a' }}>
+                  {ingestionChoice === 'GMAIL'
+                    ? 'Gmail Ingestion (Staged Review)'
+                    : ingestionChoice === 'MANUAL'
+                    ? 'Manual Add Products'
+                    : 'Excel / CSV Import'}
+                </span>
+              </div>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading || !storeName.trim() || !storeType}
-            style={{
-              width: '100%',
-              padding: '12px',
-              borderRadius: '10px',
-              border: 'none',
-              background: loading || !storeName.trim() || !storeType
-                ? '#94a3b8'
-                : 'linear-gradient(135deg, #2563eb, #7c3aed)',
-              color: '#fff',
-              fontSize: '15px',
-              fontWeight: 600,
-              cursor: loading || !storeName.trim() || !storeType ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transition: 'opacity 0.15s',
-            }}
-          >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Creating your store...
-              </>
-            ) : (
-              <>
-                <Store size={16} />
-                Create My Store
-              </>
-            )}
-          </button>
-        </form>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setStep(2)}
+                disabled={loading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleFinalLaunch}
+                disabled={loading}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '12px 24px',
+                  backgroundColor: '#2563eb',
+                  fontSize: '15px',
+                  fontWeight: '700',
+                }}
+              >
+                <Check size={18} />
+                <span>{loading ? 'Launching Shelf...' : '🚀 Launch My Dashboard'}</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-
-      <style>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 };

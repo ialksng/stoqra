@@ -247,6 +247,59 @@ export const recordSale = async ({
   return handleResponse(res);
 };
 
+export const posCheckout = async ({
+  items,
+  paymentMethod = 'UPI',
+  paymentSplits = [],
+  customerNote = '',
+}) => {
+  const res = await fetch(`${API_PREFIX}/sales/pos`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({
+      items,
+      paymentMethod,
+      paymentSplits,
+      customerNote,
+    }),
+  });
+  return handleResponse(res);
+};
+
+export const fetchStagedInvoices = async () => {
+  const res = await fetch(`${API_PREFIX}/staged`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
+export const approveStagedInvoice = async (id, approvedItems = null) => {
+  const res = await fetch(`${API_PREFIX}/staged/${id}/approve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ approvedItems }),
+  });
+  return handleResponse(res);
+};
+
+export const rejectStagedInvoice = async (id) => {
+  const res = await fetch(`${API_PREFIX}/staged/${id}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse(res);
+};
+
 export const uploadInvoice = async (file) => {
   const formData = new FormData();
   formData.append('invoice', file);

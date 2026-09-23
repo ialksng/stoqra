@@ -16,6 +16,7 @@ import DeleteConfirmModal from './components/DeleteConfirmModal.jsx';
 import StoreSetupModal from './components/StoreSetupModal.jsx';
 import StoreModal from './components/StoreModal.jsx';
 import GmailSyncModal from './components/GmailSyncModal.jsx';
+import GmailReviewDrawer from './components/GmailReviewDrawer.jsx';
 import LoginView from './components/LoginView.jsx';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import {
@@ -24,6 +25,7 @@ import {
   fetchItems,
   fetchTransactions,
   fetchInvoices,
+  fetchStagedInvoices,
   deleteItem,
   deleteInvoice,
   resetDatabase,
@@ -50,6 +52,8 @@ function Dashboard() {
   // Invoices & Transactions state
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [stagedInvoices, setStagedInvoices] = useState([]);
+  const [stagedDrawerOpen, setStagedDrawerOpen] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [txTypeFilter, setTxTypeFilter] = useState('');
   const [loadingTransactions, setLoadingTransactions] = useState(false);
@@ -195,6 +199,16 @@ function Dashboard() {
     }
   }, []);
 
+  // Fetch Staged Invoices waiting for review
+  const loadStaged = useCallback(async () => {
+    try {
+      const res = await fetchStagedInvoices();
+      setStagedInvoices(res.staged || []);
+    } catch (err) {
+      console.error('Failed to load staged invoices:', err);
+    }
+  }, []);
+
   // Fetch Transactions
   const loadTransactions = useCallback(async () => {
     setLoadingTransactions(true);
@@ -212,6 +226,7 @@ function Dashboard() {
   const refreshAllData = () => {
     loadStockHealth();
     loadItems();
+    loadStaged();
     if (activeTab === 'velocity') loadSalesVelocity();
     if (activeTab === 'invoices') loadInvoices();
     if (activeTab === 'ledger') loadTransactions();
@@ -219,7 +234,8 @@ function Dashboard() {
 
   useEffect(() => {
     loadStockHealth();
-  }, [loadStockHealth]);
+    loadStaged();
+  }, [loadStockHealth, loadStaged]);
 
   useEffect(() => {
     loadItems();
@@ -284,6 +300,68 @@ function Dashboard() {
             setLowStockOnly(true);
           }}
         />
+
+        {/* Pending Ingestion Review Banner */}
+        {stagedInvoices.length > 0 && (
+          <div
+            style={{
+              backgroundColor: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: '10px',
+              padding: '12px 18px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 2px 4px rgba(245, 158, 11, 0.08)',
+              gap: '12px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: '#fef3c7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#d97706',
+                  fontWeight: 700,
+                  fontSize: '14px',
+                }}
+              >
+                {stagedInvoices.length}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '14px', color: '#92400e' }}>
+                  {stagedInvoices.length} New Inbound Bill{stagedInvoices.length !== 1 ? 's' : ''} Ready for Review
+                </div>
+                <div style={{ fontSize: '12px', color: '#b45309' }}>
+                  AI parsed items from your Gmail sync. Verify and select retail products before committing them to your store shelf.
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setStagedDrawerOpen(true)}
+              style={{
+                backgroundColor: '#d97706',
+                borderColor: '#b45309',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+              }}
+            >
+              Review Inbound Stock ({stagedInvoices.length})
+            </button>
+          </div>
+        )}
 
         {/* View Tabs */}
         <nav className="tabs">
@@ -468,6 +546,18 @@ function Dashboard() {
         forceRescan={syncForceRescan}
         onSyncFinished={() => {
           refreshAllData();
+        }}
+      />
+
+      {/* Gmail Ingestion Review Pipeline Drawer */}
+      <GmailReviewDrawer
+        isOpen={stagedDrawerOpen}
+        onClose={() => setStagedDrawerOpen(false)}
+        stagedInvoices={stagedInvoices}
+        onActionSuccess={(msg) => {
+          addToast(msg, 'success');
+          refreshAllData();
+          loadStaged();
         }}
       />
 

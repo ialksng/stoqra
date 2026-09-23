@@ -88,13 +88,26 @@ export const LoginView = () => {
     };
   }, [authConfig?.googleClientId]);
 
+  // Canonicalize www.ialksng.me to ialksng.me to guarantee matching OAuth credentials
+  useEffect(() => {
+    if (window.location.hostname === 'www.ialksng.me') {
+      window.location.replace(
+        window.location.href.replace('www.ialksng.me', 'ialksng.me')
+      );
+    }
+  }, []);
+
   const handleGoogleLogin = () => {
     if (!authConfig?.googleClientId) {
       setError('Google Client ID is not configured.');
       return;
     }
 
-    const redirectUri = window.location.origin + window.location.pathname;
+    let origin = window.location.origin;
+    if (origin.includes('www.ialksng.me')) {
+      origin = origin.replace('www.ialksng.me', 'ialksng.me');
+    }
+    const redirectUri = origin + window.location.pathname;
     const nonce = Math.random().toString(36).substring(2) + Date.now().toString(36);
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
       authConfig.googleClientId

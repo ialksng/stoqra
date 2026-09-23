@@ -29,6 +29,15 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Canonicalize www.ialksng.me to ialksng.me for OAuth and session consistency
+app.use((req, res, next) => {
+  const host = req.headers.host || '';
+  if (host.startsWith('www.ialksng.me')) {
+    return res.redirect(301, `https://ialksng.me${req.originalUrl}`);
+  }
+  next();
+});
+
 // Request logging in development
 if (process.env.NODE_ENV !== 'test') {
   app.use((req, res, next) => {

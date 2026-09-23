@@ -14,6 +14,10 @@ import {
   deleteItem,
   deleteInvoice,
   resetDatabase,
+  getStagedInvoices,
+  approveStagedInvoice,
+  rejectStagedInvoice,
+  posCheckoutController,
 } from '../controllers/inventoryController.js';
 import { requireAuth } from '../middlewares/auth.js';
 
@@ -122,5 +126,13 @@ router.post('/worker/sync-gmail', requireAuth, triggerGmailSync);
 
 // 11. Real-time sync progress status
 router.get('/worker/sync-status', requireAuth, getGmailSyncStatus);
+
+// 12. Staged Invoices Review Pipeline
+router.get('/staged', requireAuth, getStagedInvoices);
+router.post('/staged/:id/approve', requireAuth, approveStagedInvoice);
+router.delete('/staged/:id', requireAuth, rejectStagedInvoice);
+
+// 13. Fast POS Multi-Item Checkout
+router.post('/sales/pos', requireAuth, posCheckoutController);
 
 export default router;

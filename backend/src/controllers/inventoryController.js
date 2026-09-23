@@ -2,6 +2,8 @@ import Item from '../models/Item.js';
 import InventoryTransaction from '../models/InventoryTransaction.js';
 import Invoice from '../models/Invoice.js';
 import ProcessedMail from '../models/ProcessedMail.js';
+import StagedInvoice from '../models/StagedInvoice.js';
+import Sale from '../models/Sale.js';
 import { parseInvoicePDF } from '../services/invoiceParser.js';
 import { processRestock, recordSale, InventoryError } from '../services/inventoryService.js';
 import { syncGmailInvoices, getSyncProgress } from '../workers/gmailWatcher.js';
@@ -461,11 +463,224 @@ export const resetDatabase = async (req, res, next) => {
       Invoice.deleteMany(filter),
       InventoryTransaction.deleteMany(filter),
       ProcessedMail.deleteMany(filter),
+      StagedInvoice.deleteMany(filter),
+      Sale.deleteMany(filter),
     ]);
 
     return res.status(200).json({
       success: true,
-      message: 'All inventory items, invoices, and transaction ledger records for your store have been reset.',
+      message: 'All inventory items, invoices, sales, and transaction ledger records for your store have been reset.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all pending staged invoices waiting for merchant review
+ * GET /api/inventory/staged
+ */
+export const getStagedInvoices = async (req, res, next) => {
+  try {
+    const organizationId = req.user?.organizationId;
+    const filter = {
+      status: 'PENDING_REVIEW',
+      ...(organizationId && { organizationId }),
+    };
+
+    const staged = await StagedInvoice.find(filter).sort({ createdAt: -1 }).lean();
+    return res.status(200).json({ success: true, staged });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Approve a staged invoice (or subset of checked items) and commit to shelf
+ * POST /api/inventory/staged/:id/approve
+ */
+export const approveStagedInvoice = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { approvedItems } = req.body;
+    const organizationId = req.user?.organizationId;
+
+    const staged = await StagedInvoice.findOne({
+      _id: id,
+      ...(organizationId && { organizationId }),
+    });
+
+    if (!staged) {
+      return res.status(404).json({ success: false, error: 'Staged invoice not found.' });
+    }
+
+    const itemsToRestock = Array.isArray(approvedItems) && approvedItems.length > 0
+      ? approvedItems
+      : staged.items.filter((it) => it.selected !== false);
+
+    if (itemsToRestock.length === 0) {
+      return res.status(400).json({ success: false, error: 'No items selected to add to shelf.' });
+    }
+
+    const invoicePayload = {
+      invoiceNumber: staged.invoiceNumber,
+      vendorName: staged.vendorName,
+      totalAmount: staged.totalAmount,
+      invoiceDate: staged.invoiceDate,
+      items: itemsToRestock.map((it) => ({
+        name: it.name,
+        sku: it.sku,
+        category: it.category,
+        quantity: Number(it.quantity) || 1,
+        unitCost: Number(it.costPrice) || 0,
+        sellingPrice: Number(it.sellingPrice) || 0,
+      })),
+    };
+
+    const restockResult = await processRestock(invoicePayload, staged.messageId, organizationId);
+
+    staged.status = 'APPROVED';
+    await staged.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Invoice #${staged.invoiceNumber} approved! ${itemsToRestock.length} product(s) added to your shelf.`,
+      data: restockResult,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Dismiss / reject a staged invoice
+ * DELETE /api/inventory/staged/:id
+ */
+export const rejectStagedInvoice = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.user?.organizationId;
+
+    const staged = await StagedInvoice.findOne({
+      _id: id,
+      ...(organizationId && { organizationId }),
+    });
+
+    if (!staged) {
+      return res.status(404).json({ success: false, error: 'Staged invoice not found.' });
+    }
+
+    staged.status = 'REJECTED';
+    await staged.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Invoice #${staged.invoiceNumber} dismissed.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Fast POS multi-item checkout with payment methods (UPI, CASH, CARD, UDHAR, SPLIT)
+ * POST /api/inventory/sales/pos
+ */
+export const posCheckoutController = async (req, res, next) => {
+  try {
+    const { items, paymentMethod = 'UPI', paymentSplits = [], customerNote = '' } = req.body;
+    const organizationId = req.user?.organizationId;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'Cart is empty. Please select products to sell.' });
+    }
+
+    const saleItems = [];
+    let totalAmount = 0;
+    let totalProfit = 0;
+    const lowStockWarnings = [];
+
+    for (const cartItem of items) {
+      const itemDoc = await Item.findOne({
+        _id: cartItem.itemId || cartItem.id || cartItem._id,
+        ...(organizationId && { organizationId }),
+      });
+
+      if (!itemDoc) {
+        return res.status(404).json({
+          success: false,
+          error: `Product "${cartItem.name || cartItem.itemId}" not found in inventory.`,
+        });
+      }
+
+      const qty = Number(cartItem.quantity) || 1;
+      if (itemDoc.currentStock < qty) {
+        return res.status(400).json({
+          success: false,
+          error: `Insufficient stock for "${itemDoc.name}". Only ${itemDoc.currentStock} unit(s) remaining on shelf.`,
+        });
+      }
+
+      const unitSellingPrice = Number(cartItem.unitSellingPrice || cartItem.sellingPrice || itemDoc.sellingPrice || 0);
+      const unitCostPrice = Number(itemDoc.costPrice || (itemDoc.batches?.[0]?.unitCost) || 0);
+      const subtotal = unitSellingPrice * qty;
+      const profit = (unitSellingPrice - unitCostPrice) * qty;
+
+      totalAmount += subtotal;
+      totalProfit += profit;
+
+      // Decrement stock in catalog
+      itemDoc.currentStock -= qty;
+      if (itemDoc.currentStock <= itemDoc.lowStockThreshold) {
+        lowStockWarnings.push({
+          itemId: itemDoc._id,
+          name: itemDoc.name,
+          currentStock: itemDoc.currentStock,
+          lowStockThreshold: itemDoc.lowStockThreshold,
+        });
+      }
+      await itemDoc.save();
+
+      // Record transaction ledger entry
+      await InventoryTransaction.create({
+        organizationId,
+        itemId: itemDoc._id,
+        type: 'SALE',
+        quantity: -qty,
+        balanceAfter: itemDoc.currentStock,
+        unitPrice: unitSellingPrice,
+        totalValue: subtotal,
+        reference: `POS Sale (${paymentMethod})`,
+        notes: customerNote,
+      });
+
+      saleItems.push({
+        itemId: itemDoc._id,
+        name: itemDoc.name,
+        sku: itemDoc.sku,
+        quantity: qty,
+        unitCostPrice,
+        unitSellingPrice,
+        subtotal,
+      });
+    }
+
+    // Record complete Sale
+    const sale = await Sale.create({
+      organizationId,
+      items: saleItems,
+      totalAmount,
+      totalProfit,
+      paymentMethod,
+      paymentSplits,
+      customerNote,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Sale completed successfully! Total: ₹${totalAmount.toLocaleString('en-IN')}`,
+      sale,
+      lowStockWarnings,
     });
   } catch (error) {
     next(error);
@@ -479,8 +694,13 @@ export default {
   getTransactions,
   getInvoices,
   triggerGmailSync,
+  createItem,
   updateItem,
   deleteItem,
   deleteInvoice,
   resetDatabase,
+  getStagedInvoices,
+  approveStagedInvoice,
+  rejectStagedInvoice,
+  posCheckoutController,
 };

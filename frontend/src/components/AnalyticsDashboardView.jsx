@@ -69,6 +69,11 @@ export const AnalyticsDashboardView = () => {
     grossMarginPercent: 0,
     salesCount: 0,
     invoiceCount: 0,
+    todayRevenue: 0,
+    todayProfit: 0,
+    todayProfitMargin: 0,
+    deadStockCount: 0,
+    deadStockLockedCapital: 0,
   };
 
   const handleExportExcel = () => {
@@ -277,6 +282,39 @@ export const AnalyticsDashboardView = () => {
             Inflow minus Procurement Outflow
           </div>
         </div>
+
+        {/* Today's Inflow & Profit */}
+        <div className="metric-card success">
+          <div className="metric-header">
+            <span className="metric-title">Today's Revenue</span>
+            <IndianRupee size={18} color="#059669" />
+          </div>
+          <div className="metric-value" style={{ color: '#059669' }}>
+            {formatINR(kpi.todayRevenue)}
+          </div>
+          <div style={{ fontSize: '12px', color: '#047857', marginTop: '4px' }}>
+            Net Profit: <strong>{formatINR(kpi.todayProfit)}</strong> ({kpi.todayProfitMargin}%)
+          </div>
+        </div>
+
+        {/* Dead Stock & Locked Capital */}
+        <div
+          className="metric-card warning"
+          style={{ cursor: kpi.deadStockCount > 0 ? 'pointer' : 'default' }}
+          onClick={() => setSubTab('deadstock')}
+          title="Click to view idle inventory"
+        >
+          <div className="metric-header">
+            <span className="metric-title">Locked Capital (Dead Stock)</span>
+            <Flame size={18} color="#ea580c" />
+          </div>
+          <div className="metric-value" style={{ color: '#c2410c' }}>
+            {formatINR(kpi.deadStockLockedCapital)}
+          </div>
+          <div style={{ fontSize: '12px', color: '#9a3412', marginTop: '4px' }}>
+            {kpi.deadStockCount} items unsold in 30+ days
+          </div>
+        </div>
       </div>
 
       {/* Sub-Navigation Tabs for Analytical Lenses */}
@@ -286,6 +324,7 @@ export const AnalyticsDashboardView = () => {
           { id: 'categories', label: 'Product Categories', icon: <Layers size={15} /> },
           { id: 'suppliers', label: 'Suppliers & Vendors', icon: <Truck size={15} /> },
           { id: 'orders', label: 'Selling Orders & Payments', icon: <ShoppingCart size={15} /> },
+          { id: 'deadstock', label: 'Dead Stock & Locked Capital', icon: <Flame size={15} /> },
           { id: 'abc', label: 'ABC Pareto Analysis', icon: <PieChart size={15} /> },
           { id: 'margins', label: 'SKU Profit Margins', icon: <DollarSign size={15} /> },
           { id: 'urgency', label: 'Stockout Urgency', icon: <AlertTriangle size={15} /> },
@@ -621,6 +660,107 @@ export const AnalyticsDashboardView = () => {
                           ) : (
                             <span style={{ fontSize: '12px', color: '#cbd5e1' }}>—</span>
                           )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- SUB-TAB: DEAD STOCK & LOCKED CAPITAL ---------------- */}
+      {subTab === 'deadstock' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="cards-grid">
+            <div className="metric-card warning">
+              <div className="metric-header">
+                <span className="metric-title">Total Locked Working Capital</span>
+                <Flame size={18} color="#ea580c" />
+              </div>
+              <div className="metric-value" style={{ color: '#c2410c' }}>
+                {formatINR(analytics?.deadStock?.totalLockedCapital || 0)}
+              </div>
+              <div style={{ fontSize: '12px', color: '#9a3412', marginTop: '4px' }}>
+                Money trapped in slow-moving/idle inventory
+              </div>
+            </div>
+
+            <div className="metric-card danger">
+              <div className="metric-header">
+                <span className="metric-title">Dead Products Count</span>
+                <AlertCircle size={18} color="#ef4444" />
+              </div>
+              <div className="metric-value" style={{ color: '#dc2626' }}>
+                {analytics?.deadStock?.totalDeadItemsCount || 0}
+              </div>
+              <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '4px' }}>
+                SKUs with 0 recorded sales in the last 30 days
+              </div>
+            </div>
+          </div>
+
+          <div className="table-card">
+            <div className="table-header-bar">
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '16px', color: '#0f172a' }}>
+                  Dead Inventory Liquidation Watchlist
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  Products sitting on shelves with zero outbound sales velocity in 30+ days. Consider discount bundles or return-to-vendor.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Product Name & SKU</th>
+                    <th>Category</th>
+                    <th style={{ textAlign: 'right' }}>Stock on Hand</th>
+                    <th style={{ textAlign: 'right' }}>Unit Cost Price (₹)</th>
+                    <th style={{ textAlign: 'right' }}>Selling Price (₹)</th>
+                    <th style={{ textAlign: 'right' }}>Locked Working Capital (₹)</th>
+                    <th>Recommended Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(!analytics?.deadStock?.deadStockItems || analytics.deadStock.deadStockItems.length === 0) ? (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '36px', color: '#10b981', fontWeight: 600 }}>
+                        <CheckCircle2 size={24} style={{ margin: '0 auto 8px auto', display: 'block' }} />
+                        Great news! Zero dead stock detected. All stocked inventory has recent sales velocity.
+                      </td>
+                    </tr>
+                  ) : (
+                    analytics.deadStock.deadStockItems.map((item) => (
+                      <tr key={item.id}>
+                        <td>
+                          <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.name}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>SKU: {item.sku}</div>
+                        </td>
+                        <td>
+                          <span className="badge badge-neutral">{item.category}</span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>
+                          {formatIndianNumber(item.currentStock)} units
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {formatINR(item.costPrice)}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          {formatINR(item.sellingPrice)}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 800, color: '#c2410c' }}>
+                          {formatINR(item.lockedCapital)}
+                        </td>
+                        <td>
+                          <span className="badge badge-warning" style={{ fontSize: '11px' }}>
+                            Bundle / 15% Clearance Sale
+                          </span>
                         </td>
                       </tr>
                     ))
